@@ -29,7 +29,7 @@ st.markdown(
 )
 
 # Create a sidebar for navigation (for a dashboard-style layout)
-tabs = st.sidebar.radio("Select an Analysis Type:", ["Material Consumption Analysis", "Order Placement Analysis", "Goods Receipt Analysis","Lead Time Analysis", "Inventory Simulation"])
+tabs = st.sidebar.radio("Select an Analysis Type:", ["Material Consumption Analysis", "Order Placement Analysis", "Goods Receipt Analysis","Lead Time Analysis","Forecast Page", "Inventory Simulation"])
 
 if tabs == "Material Consumption Analysis":
     st.title("Material Consumption Analysis")
@@ -197,6 +197,7 @@ elif tabs == "Forecast Page V2":
                 if model_choice == "XGBoost":
                     forecast_results,plt = forecast_models.forecast_weekly_consumption_xgboost(filtered_df, forecast_weeks_ahead=forecast_weeks, seasonality=seasonality)
                     st.write("XGBoost Forecast Results:")
+                    st.plotly_chart(plt)
                     st.pyplot(plt)
                     st.write(forecast_results)
                 elif model_choice == "ARIMA":
@@ -213,7 +214,7 @@ elif tabs == "Forecast Page V2":
             elif 'Consumption' not in df.columns:
                 st.error("The uploaded file does not contain a 'Consumption' column.")
 
-if tabs == "Forecast Page":
+elif tabs == "Forecast Page":
     st.title("Forecast Model")
 
     # File uploader
@@ -234,18 +235,20 @@ if tabs == "Forecast Page":
 
             if st.button("Run Forecast"):
                 if model_choice == "XGBoost":
-                    forecast_results, plt = forecast_models.forecast_weekly_consumption_xgboost(
+                    forecast_results, plt = forecast_models.forecast_weekly_consumption_xgboost_plotly(
                         filtered_df, forecast_weeks_ahead=forecast_weeks, seasonality=seasonality
                     )
                     st.write("XGBoost Forecast Results:")
-                    st.pyplot(plt)
+                    st.plotly_chart(plt)
+                    #st.pyplot(plt)
                     st.write(forecast_results)
                 elif model_choice == "ARIMA":
-                    forecast_results, plt = forecast_models.forecast_weekly_consumption_arima(
+                    forecast_results, plt = forecast_models.forecast_weekly_consumption_arima_plotly(
                         filtered_df, forecast_weeks_ahead=forecast_weeks, seasonality=seasonality
                     )
                     st.write("ARIMA Forecast Results:")
-                    st.pyplot(plt)
+                    #st.pyplot(plt)
+                    st.plotly_chart(plt)
                     st.write(forecast_results)
 
         elif df is not None:

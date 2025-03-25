@@ -79,6 +79,7 @@ def load_data(file):
 def load_forecast_consumption_data(file):
 
     df = pd.read_excel(file)
+    df.columns = df.columns.str.strip()
 
     # Define required columns
     required_columns = {'Material Number', 'Pstng Date', 'Quantity'}

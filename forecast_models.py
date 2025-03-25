@@ -8,6 +8,7 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import adfuller
 import statsmodels.api as sm
+import plotly.graph_objects as go
 
 
 
@@ -106,6 +107,96 @@ def forecast_weekly_consumption_xgboost(df, forecast_weeks_ahead=6, seasonality=
     plt.show()
 
     return forecast_results_df, plt
+
+def forecast_weekly_consumption_xgboost_plotly(df, forecast_weeks_ahead=6, seasonality='No'):
+    """
+    Forecasts weekly consumption for a given material using XGBoost and recursive forecasting.
+
+    Args:
+        df (pandas.DataFrame): DataFrame containing consumption data.
+        forecast_weeks_ahead (int): Number of weeks to forecast into the future.
+        seasonality (str): 'Yes' to include year and week as features, 'No' otherwise.
+
+    Returns:
+        pandas.DataFrame: DataFrame containing the forecasted consumption.
+    """
+    material_number = df['Material Number'].head(1).values[0]
+    df_material = df
+    weeks = ['WW' + str(i) + '_Consumption' for i in range(1, 53)]
+    df_material = df_material[weeks]
+    weekly_data = df_material.transpose().reset_index()
+    weekly_data.columns = ['week', 'consumption']
+    weekly_data['week'] = weekly_data['week'].str.extract(r'(\d+)').astype(int)
+    weekly_data = weekly_data.sort_values('week')
+
+    weekly_data['year'] = 2024
+    weekly_data['lag_1'] = weekly_data['consumption'].shift(1)
+    weekly_data['lag_2'] = weekly_data['consumption'].shift(2)
+    weekly_data['rolling_mean_6'] = weekly_data['consumption'].shift(1).rolling(window=6, min_periods=1).mean()
+    weekly_data['rolling_std_6'] = weekly_data['consumption'].shift(1).rolling(window=6, min_periods=1).std()
+
+    # Fill NA with 0
+    weekly_data[['lag_1', 'lag_2', 'rolling_mean_6', 'rolling_std_6']] = weekly_data[['lag_1', 'lag_2', 'rolling_mean_6', 'rolling_std_6']].fillna(0)
+
+    if seasonality == 'Yes':
+        features = ['year', 'week', 'lag_1', 'lag_2', 'rolling_mean_6', 'rolling_std_6']
+    else:
+        features = ['lag_1', 'lag_2', 'rolling_mean_6', 'rolling_std_6']
+
+    X = weekly_data[features]
+    y = weekly_data['consumption']
+
+    model = xgb.XGBRegressor(objective='reg:squarederror', n_estimators=1000, learning_rate=0.1, max_depth=6)
+
+    forecast_weeks = pd.DataFrame({'week': np.arange(1, forecast_weeks_ahead + 1)})
+    forecast_weeks['year'] = 2025
+
+    forecast_results = []
+    last_data = weekly_data.iloc[-1].copy()
+    temp_weekly_data = weekly_data.copy()  # create a copy of the original data to append to
+
+    model.fit(X, y)
+
+    for index, row in forecast_weeks.iterrows():
+        if seasonality == 'Yes':
+            row['year'] = 2025
+            row['week'] = row['week']
+        row['lag_1'] = last_data['consumption']
+        row['lag_2'] = last_data['lag_1']
+        rolling_data = pd.Series([last_data['lag_2'], last_data['lag_1'], last_data['consumption']])
+        rolling_data = pd.concat([temp_weekly_data['consumption'].tail(3), rolling_data])
+        row['rolling_mean_6'] = rolling_data.tail(6).mean()
+        row['rolling_std_6'] = rolling_data.tail(6).std()
+        X_forecast = pd.DataFrame([row[features]])
+        predicted_consumption = model.predict(X_forecast)[0]
+        forecast_results.append({'week': row['week'], 'predicted_consumption': predicted_consumption})
+
+        # Update last_data for next iteration
+        last_data['lag_2'] = last_data['lag_1']
+        last_data['lag_1'] = last_data['consumption']
+        last_data['consumption'] = predicted_consumption
+
+        # Append the predicted consumption to the temporary data for retraining
+        new_row = pd.Series(row)
+        new_row['consumption'] = predicted_consumption
+        temp_weekly_data = pd.concat([temp_weekly_data, pd.DataFrame([new_row])], ignore_index=True)
+
+        # Retrain the model with the updated data
+        X = temp_weekly_data[features]
+        y = temp_weekly_data['consumption']
+        # model.fit(X, y)
+
+    forecast_results_df = pd.DataFrame(forecast_results)
+    forecast_results_df['year'] = 2025
+
+    # Plotting
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=weekly_data['week'], y=weekly_data['consumption'], mode='lines', name='Actual Consumption (2024)', line=dict(color='blue')))
+    fig.add_trace(go.Scatter(x=forecast_results_df['week'] + 52, y=forecast_results_df['predicted_consumption'], mode='lines', name='Forecasted Consumption (2025)', line=dict(color='red', dash='dash')))
+    fig.update_layout(title=f'Recursive Consumption Forecasting for Material {material_number} (Weeks 1-{forecast_weeks_ahead}, 2025)', xaxis_title='Week', yaxis_title='Consumption', legend_title='Legend')
+    fig.show()
+
+    return forecast_results_df, fig
 
 def forecast_weekly_consumption_xgboost_v2(df, forecast_weeks_ahead=6, seasonality='No'):
     """
@@ -633,6 +724,93 @@ def forecast_weekly_consumption_arima(df, forecast_weeks_ahead=6, seasonality = 
     plt.tight_layout()
 
     return forecast_results_df, plt
+
+def forecast_weekly_consumption_arima_plotly(df, forecast_weeks_ahead=6, seasonality = "No"):
+    """
+    Forecasts weekly consumption for a given material using SARIMA.
+
+    Args:
+        df (pandas.DataFrame): DataFrame containing consumption data.
+        forecast_weeks_ahead (int): Number of weeks to forecast into the future.
+        seasonality (str): 'Yes' to include seasonality, 'No' otherwise.
+
+    Returns:
+        pandas.DataFrame: DataFrame containing the forecasted consumption.
+    """
+
+    material_number = df['Material Number'].head(1).values[0]
+    df_material = df
+    weeks = ['WW' + str(i) + '_Consumption' for i in range(1, 53)]
+    df_material = df_material[weeks]
+    weekly_data = df_material.transpose().reset_index()
+    weekly_data.columns = ['week', 'consumption']
+    weekly_data['week'] = weekly_data['week'].str.extract('(\d+)').astype(int)
+
+    weekly_data['year'] = 2024
+
+    weekly_data = weekly_data.sort_values(by=['year', 'week'])
+
+    # Check stationarity and difference if needed
+    d = 0
+    temp_series = weekly_data['consumption'].copy()
+    while adfuller(temp_series)[1] > 0.05:
+        temp_series = difference_series(temp_series)
+        d += 1
+
+    # Find SARIMA order
+    if d > 0:
+        differenced_consumption = difference_series(weekly_data['consumption'], d)
+        p, q = find_arima_order(differenced_consumption, d)
+    else:
+        p, q = find_arima_order(weekly_data['consumption'], d)
+    print(f"ARIMA Order: (p, d, q) = ({p}, {d}, {q})")
+    
+    order = (p, d, q)
+    seasonal_order = (p, d, q, 52)
+
+    if seasonality == "Yes":
+        model = SARIMAX(weekly_data['consumption'], order=order, seasonal_order=seasonal_order)
+        model_fit = model.fit(disp=False)
+
+    else:
+        model = ARIMA(weekly_data['consumption'], order=order)
+        model_fit = model.fit()
+
+    # Forecast
+    forecast = model_fit.get_forecast(steps=forecast_weeks_ahead+1)
+    forecast_values = forecast.predicted_mean.clip(lower=0)
+
+    last_row = weekly_data.iloc[-1]
+    start_year = last_row['year']
+    start_week = last_row['week']
+
+    forecast_weeks = []
+    current_year = start_year
+    current_week = start_week + 1
+
+    for i in range(forecast_weeks_ahead+1):
+
+        if current_week > 52:
+            current_week = 1
+            current_year += 1
+
+        forecast_weeks.append({'week': current_week, 'year': current_year, 'predicted_consumption': forecast_values.iloc[i]})
+        current_week += 1
+    
+    forecast_results_df = pd.DataFrame(forecast_weeks)
+
+    # Plotting
+    if seasonality == "Yes":
+        model_name = "SARIMAX"
+    else:
+        model_name = "ARIMA"
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=[f"{year} - {week}" for year, week in zip(weekly_data['year'], weekly_data['week'])], y=weekly_data['consumption'], mode='lines', name='Actual Consumption', line=dict(color='blue')))
+    fig.add_trace(go.Scatter(x=[f"{int(year)} - {week}" for year, week in zip(forecast_results_df['year'], forecast_results_df['week'])], y=forecast_results_df['predicted_consumption'], mode='lines', name='Forecasted Consumption', line=dict(color='red', dash='dash')))
+    fig.update_layout(title=f'{model_name} Demand Forecasting for Material {material_number}', xaxis_title='Year - Week', yaxis_title='Demand (Units)', legend_title='Legend')
+
+    return forecast_results_df, fig
 
 def forecast_weekly_consumption_arima_v2(df, external_df, forecast_weeks_ahead=6, seasonality = "No"):
     """
