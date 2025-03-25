@@ -451,110 +451,13 @@ elif tabs == "Inventory Simulation":
 
         if st.button("Run Simulation"):
             with st.spinner("Running simulation..."):
-                inventory_history,proactive_inventory_history, stockout_weeks, proactive_stockout_weeks, wos_history, proactive_wos_history, consumption_history, weekly_events = DES.simulate_inventory(
-                    filtered_consumption, filtered_orders, filtered_receipts,
-                    initial_inventory, reorder_point, order_quantity, lead_time, lead_time_std_dev,
-                    demand_surge_weeks_input, demand_surge_factor,
-                    consumption_distribution_params, consumption_type, consumption_values, num_weeks,
-                    order_distribution_params, order_quantity_type 
-                )
-                # Single simulation (Reactive + Proactive)
-                # week_numbers = list(range(1, num_weeks + 1))
-                # # Create DataFrames for inventory, WoS, and consumption
-                # inventory_df = pd.DataFrame({
-                #     'Working Week': week_numbers,
-                #     'Reactive Inventory': inventory_history,
-                #     'Proactive Inventory': proactive_inventory_history
-                # })
-
-                # wos_df = pd.DataFrame({
-                #     'Working Week': week_numbers,
-                #     'Reactive WoS': wos_history,
-                #     'Proactive WoS': proactive_wos_history
-                # })
-
-                # consumption_df = pd.DataFrame({
-                #     'Working Week': week_numbers,
-                #     'Consumption': consumption_history
-                # })
-
-                # # Visualization
-                # fig_inventory = px.line(inventory_df, x='Working Week', y=['Reactive Inventory', 'Proactive Inventory'], title='Inventory Over Time')
-                # fig_inventory.update_xaxes(dtick=5)
-                # fig_inventory.update_layout(yaxis_title='Inventory')
-
-                # # Highlight stockout weeks
-                # if stockout_weeks:
-                #     fig_inventory.add_vrect(x0=min(stockout_weeks), x1=max(stockout_weeks), fillcolor="red", opacity=0.25, line_width=0, annotation_text="Stockout Weeks", annotation_position="top left")
-                # if proactive_stockout_weeks:
-                #     fig_inventory.add_vrect(x0=min(proactive_stockout_weeks), x1=max(proactive_stockout_weeks), fillcolor="orange", opacity=0.25, line_width=0, annotation_text="Proactive Stockout Weeks", annotation_position="top right")
-
-                # st.plotly_chart(fig_inventory)
-
-                # fig_wos = px.line(wos_df, x='Working Week', y=['Reactive WoS', 'Proactive WoS'], title='Weeks of Supply (WoS) Over Time')
-                # fig_wos.update_xaxes(dtick=5)
-                # fig_wos.update_layout(yaxis_title='Weeks of Supply')
-
-                # # Highlight stockout weeks
-                # if stockout_weeks:
-                #     fig_wos.add_vrect(x0=min(stockout_weeks), x1=max(stockout_weeks), fillcolor="red", opacity=0.25, line_width=0, annotation_text="Stockout Weeks", annotation_position="top left")
-                # if proactive_stockout_weeks:
-                #     fig_wos.add_vrect(x0=min(proactive_stockout_weeks), x1=max(proactive_stockout_weeks), fillcolor="orange", opacity=0.25, line_width=0, annotation_text="Proactive Stockout Weeks", annotation_position="top right")
-
-                # st.plotly_chart(fig_wos)
-
-                # fig_consumption = px.line(consumption_df, x='Working Week', y='Consumption', title='Consumption Over Time')
-                # fig_consumption.update_xaxes(dtick=5)
-                # fig_consumption.update_layout(yaxis_title='Consumption')
-
-                # st.plotly_chart(fig_consumption)
-
-                # # Display stockout information
-                # if stockout_weeks:
-                #     st.warning(f"Reactive stockout occurred in weeks: {', '.join(map(str, stockout_weeks))}")
-                # else:
-                #     st.success("No reactive stockouts occurred.")
-
-                # if proactive_stockout_weeks:
-                #     st.warning(f"Proactive stockout occurred in weeks: {', '.join(map(str, proactive_stockout_weeks))}")
-                # else:
-                #     st.success("No proactive stockouts occurred.")
-
-
-                # Single simulation (Reactive)
-                # inventory_df = pd.DataFrame({'Working Week': week_numbers, 'Inventory': inventory_history, 'WoS': wos_history})
-                # consumption_df = pd.DataFrame({'Working Week': week_numbers, 'Consumption': consumption_history})
-
-                # # Visualization
-                # fig_inventory = px.line(inventory_df, x='Working Week', y='Inventory', title='Inventory Over Time')
-                # fig_inventory.update_xaxes(dtick=5)
-                # st.plotly_chart(fig_inventory)
-
-                # fig_wos = px.line(inventory_df, x='Working Week', y='WoS', title='Weeks of Supply (WoS) Over Time')
-                # fig_wos.update_xaxes(dtick=5)
-                # st.plotly_chart(fig_wos)
-
-                # fig_consumption = px.line(consumption_df, x='Working Week', y='Consumption', title='Consumption Over Time')
-                # fig_consumption.update_xaxes(dtick=5)
-                # st.plotly_chart(fig_consumption)
-
-                # if stockout_weeks:
-                #     st.warning(f"Stockout occurred in weeks: {', '.join(map(str, stockout_weeks))}")
-                # else:
-                #     st.success("No stockouts occurred.")
-                
-                # Display Weekly Events
-                st.subheader("Weekly Simulation Events after Monte Carlo")
-                # for event in weekly_events:
-                #     st.markdown(event)
-
                 args = (filtered_consumption, filtered_orders, filtered_receipts, initial_inventory, reorder_point, order_quantity, lead_time, lead_time_std_dev, demand_surge_weeks_input, demand_surge_factor, consumption_distribution_params, consumption_type, consumption_values, num_weeks, order_distribution_params, order_quantity_type)
 
-                # # Run Monte Carlo simulation
-                # all_inventory_histories, all_stockout_weeks, all_wos_histories, all_consumption_histories, all_weekly_events = DES.run_monte_carlo_simulation(N, *args)
+                # Run Monte Carlo simulation
+                
                 all_inventory_histories, all_proactive_inventory_histories, all_stockout_weeks, all_proactive_stockout_weeks, all_wos_histories, all_proactive_wos_histories, all_consumption_histories, all_weekly_events = DES.run_monte_carlo_simulation(N, *args)
-                # # Compute averages
-                # avg_inventory, avg_wos, avg_consumption, stockout_frequency = DES.compute_averages(all_inventory_histories, all_stockout_weeks, all_wos_histories, all_consumption_histories)
+                # Compute averages
+            
                 avg_inventory, avg_wos, avg_consumption, stockout_frequency, avg_proactive_inventory,avg_proactive_wos, stockout_frequency_proactive = DES.compute_averages(all_inventory_histories, all_proactive_inventory_histories, all_stockout_weeks, all_proactive_stockout_weeks, all_wos_histories, all_proactive_wos_histories, all_consumption_histories)
 
                 # # Find the representative run
@@ -563,107 +466,69 @@ elif tabs == "Inventory Simulation":
                 # # Get details of the representative run
                 representative_inventory, representative_inventory_proactive, representative_stockout_weeks, representative_stockout_weeks_proactive, representative_wos, representative_wos_proactive, representative_consumption, representative_weekly_events = DES.get_representative_run_details(representative_index, all_inventory_histories, all_proactive_inventory_histories, all_stockout_weeks, all_proactive_stockout_weeks, all_wos_histories, all_proactive_wos_histories, all_consumption_histories, all_weekly_events)
 
-                # # Print results
-                # print("Average Inventory:", avg_inventory)
-                # print("Average WoS:", avg_wos)
-                # print("Average Consumption:", avg_consumption)
-                # print("Stockout Frequency:", stockout_frequency)
-                # print("\nRepresentative Run Weekly Events:")
-                # st.write(avg_inventory)
-                # st.write(avg_wos)
-                # st.write(avg_consumption)
-                
-
-                # Monte Carlo Simulation (Reactive)
-
-                # week_numbers = list(range(1, num_weeks + 1))
-                # inventory_df = pd.DataFrame({'Working Week': week_numbers, 'Inventory': representative_inventory, 'WoS': representative_wos})
-                # consumption_df = pd.DataFrame({'Working Week': week_numbers, 'Consumption': representative_consumption})
-
-                # # Visualization
-                # fig_inventory = px.line(inventory_df, x='Working Week', y='Inventory', title='Inventory Over Time')
-                # fig_inventory.update_xaxes(dtick=5)
-                # st.plotly_chart(fig_inventory)
-
-                # fig_wos = px.line(inventory_df, x='Working Week', y='WoS', title='Weeks of Supply (WoS) Over Time')
-                # fig_wos.update_xaxes(dtick=5)
-                # st.plotly_chart(fig_wos)
-
-                # fig_consumption = px.line(consumption_df, x='Working Week', y='Consumption', title='Consumption Over Time')
-                # fig_consumption.update_xaxes(dtick=5)
-                # st.plotly_chart(fig_consumption)
-
-                # st.warning(f"Stockout Frequency (Percentage of runs where a stockout occurred): {stockout_frequency * 100:.2f}% ")
-                # if representative_stockout_weeks and len(representative_stockout_weeks) != 0:
-                #     st.warning(f"Stockout occurred for the above simulation in weeks: {', '.join(map(str, representative_stockout_weeks))}")
-                # else:
-                #     st.success("No stockouts occurred in this simulation.")
-                # for event in representative_weekly_events:
-                #     st.write(f"{event}\n")
-
                 # Monte Carlo Simulation (Proactive + Reactive)
 
-                # week_numbers = list(range(1, num_weeks + 1))
-                # # Create DataFrames for inventory, WoS, and consumption
-                # inventory_df = pd.DataFrame({
-                #     'Working Week': week_numbers,
-                #     'Reactive Inventory': representative_inventory,
-                #     'Proactive Inventory': representative_inventory_proactive
-                # })
+                week_numbers = list(range(1, num_weeks + 1))
+                # Create DataFrames for inventory, WoS, and consumption
+                inventory_df = pd.DataFrame({
+                    'Working Week': week_numbers,
+                    'Reactive Inventory': representative_inventory,
+                    'Proactive Inventory': representative_inventory_proactive
+                })
 
-                # wos_df = pd.DataFrame({
-                #     'Working Week': week_numbers,
-                #     'Reactive WoS': representative_wos,
-                #     'Proactive WoS': representative_wos_proactive
-                # })
+                wos_df = pd.DataFrame({
+                    'Working Week': week_numbers,
+                    'Reactive WoS': representative_wos,
+                    'Proactive WoS': representative_wos_proactive
+                })
 
-                # consumption_df = pd.DataFrame({
-                #     'Working Week': week_numbers,
-                #     'Consumption': consumption_history
-                # })
+                consumption_df = pd.DataFrame({
+                    'Working Week': week_numbers,
+                    'Consumption': representative_consumption
+                })
 
-                # # Visualization
-                # fig_inventory = px.line(inventory_df, x='Working Week', y=['Reactive Inventory', 'Proactive Inventory'], title='Inventory Over Time')
-                # fig_inventory.update_xaxes(dtick=5)
-                # fig_inventory.update_layout(yaxis_title='Inventory')
+                # Visualization
+                fig_inventory = px.line(inventory_df, x='Working Week', y=['Reactive Inventory', 'Proactive Inventory'], title='Inventory Over Time')
+                fig_inventory.update_xaxes(dtick=5)
+                fig_inventory.update_layout(yaxis_title='Inventory')
 
-                # # Highlight stockout weeks
-                # if stockout_weeks:
-                #     fig_inventory.add_vrect(x0=min(stockout_weeks), x1=max(stockout_weeks), fillcolor="red", opacity=0.25, line_width=0, annotation_text="Stockout Weeks", annotation_position="top left")
-                # if proactive_stockout_weeks:
-                #     fig_inventory.add_vrect(x0=min(proactive_stockout_weeks), x1=max(proactive_stockout_weeks), fillcolor="orange", opacity=0.25, line_width=0, annotation_text="Proactive Stockout Weeks", annotation_position="top right")
+                # Highlight stockout weeks
+                if stockout_weeks:
+                    fig_inventory.add_vrect(x0=min(stockout_weeks), x1=max(stockout_weeks), fillcolor="red", opacity=0.25, line_width=0, annotation_text="Stockout Weeks", annotation_position="top left")
+                if proactive_stockout_weeks:
+                    fig_inventory.add_vrect(x0=min(proactive_stockout_weeks), x1=max(proactive_stockout_weeks), fillcolor="orange", opacity=0.25, line_width=0, annotation_text="Proactive Stockout Weeks", annotation_position="top right")
 
-                # st.plotly_chart(fig_inventory)
+                st.plotly_chart(fig_inventory)
 
-                # fig_wos = px.line(wos_df, x='Working Week', y=['Reactive WoS', 'Proactive WoS'], title='Weeks of Supply (WoS) Over Time')
-                # fig_wos.update_xaxes(dtick=5)
-                # fig_wos.update_layout(yaxis_title='Weeks of Supply')
+                fig_wos = px.line(wos_df, x='Working Week', y=['Reactive WoS', 'Proactive WoS'], title='Weeks of Supply (WoS) Over Time')
+                fig_wos.update_xaxes(dtick=5)
+                fig_wos.update_layout(yaxis_title='Weeks of Supply')
 
-                # # Highlight stockout weeks
-                # if stockout_weeks:
-                #     fig_wos.add_vrect(x0=min(stockout_weeks), x1=max(stockout_weeks), fillcolor="red", opacity=0.25, line_width=0, annotation_text="Stockout Weeks", annotation_position="top left")
-                # if proactive_stockout_weeks:
-                #     fig_wos.add_vrect(x0=min(proactive_stockout_weeks), x1=max(proactive_stockout_weeks), fillcolor="orange", opacity=0.25, line_width=0, annotation_text="Proactive Stockout Weeks", annotation_position="top right")
+                # Highlight stockout weeks
+                if stockout_weeks:
+                    fig_wos.add_vrect(x0=min(stockout_weeks), x1=max(stockout_weeks), fillcolor="red", opacity=0.25, line_width=0, annotation_text="Stockout Weeks", annotation_position="top left")
+                if proactive_stockout_weeks:
+                    fig_wos.add_vrect(x0=min(proactive_stockout_weeks), x1=max(proactive_stockout_weeks), fillcolor="orange", opacity=0.25, line_width=0, annotation_text="Proactive Stockout Weeks", annotation_position="top right")
 
-                # st.plotly_chart(fig_wos)
+                st.plotly_chart(fig_wos)
 
-                # fig_consumption = px.line(consumption_df, x='Working Week', y='Consumption', title='Consumption Over Time')
-                # fig_consumption.update_xaxes(dtick=5)
-                # fig_consumption.update_layout(yaxis_title='Consumption')
+                fig_consumption = px.line(consumption_df, x='Working Week', y='Consumption', title='Consumption Over Time')
+                fig_consumption.update_xaxes(dtick=5)
+                fig_consumption.update_layout(yaxis_title='Consumption')
 
-                # st.plotly_chart(fig_consumption)
+                st.plotly_chart(fig_consumption)
 
-                # # Display stockout information
-                # if stockout_weeks:
-                #     st.warning(f"Reactive stockout occurred in weeks: {', '.join(map(str, stockout_weeks))}")
-                # else:
-                #     st.success("No reactive stockouts occurred.")
+                # Display stockout information
+                if stockout_weeks:
+                    st.warning(f"Reactive stockout occurred in weeks: {', '.join(map(str, stockout_weeks))}")
+                else:
+                    st.success("No reactive stockouts occurred.")
 
-                # if proactive_stockout_weeks:
-                #     st.warning(f"Proactive stockout occurred in weeks: {', '.join(map(str, proactive_stockout_weeks))}")
-                # else:
-                #     st.success("No proactive stockouts occurred.")
-
-                # for event in representative_weekly_events:
-                #     st.markdown(event)
+                if proactive_stockout_weeks:
+                    st.warning(f"Proactive stockout occurred in weeks: {', '.join(map(str, proactive_stockout_weeks))}")
+                else:
+                    st.success("No proactive stockouts occurred.")
+                st.subheader("Weekly Simulation Events after Monte Carlo")
+                for event in representative_weekly_events:
+                    st.markdown(event)
                 
