@@ -639,16 +639,17 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
         
         consumption_history.append(consumption_this_week)
         event_description += f"Consumption this week: {consumption_this_week} (Source: {consumption_source})\n"
-        consumption_df_for_forecasting = pd.DataFrame({
-            'Year': [2025] * len(consumption_history),
-            'Week': [i + 1 for i in range(len(consumption_history))],
-            'Consumption': consumption_history
-        })
+        # consumption_df_for_forecasting = pd.DataFrame({
+        #     'Year': [2025] * len(consumption_history),
+        #     'Week': [i + 1 for i in range(len(consumption_history))],
+        #     'Consumption': consumption_history
+        # })
 
-        forecast_results_df = forecast_models.forecast_weekly_consumption_xgboost_v3(filtered_consumption, consumption_df_for_forecasting, int(lead_time))
-        forecasted_values = forecast_results_df.predicted_consumption.values
-        forecasted_values = forecasted_values[:-1]
-        sum_of_forecasted_values = int(forecasted_values.sum())
+        # forecast_results_df = forecast_models.forecast_weekly_consumption_xgboost_v3(filtered_consumption, consumption_df_for_forecasting, int(lead_time))
+        # forecasted_values = forecast_results_df.predicted_consumption.values
+        # forecasted_values = forecasted_values[:-1]
+        # sum_of_forecasted_values = int(forecasted_values.sum())
+        sum_of_forecasted_values = 20
         event_description += f"Forecasted consumption for next {lead_time} weeks is {sum_of_forecasted_values}.\n"
 
         proactive_forecast = False
