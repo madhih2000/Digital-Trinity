@@ -4,6 +4,7 @@ import scipy.stats as stats
 import statsmodels.api as sm
 import numpy as np
 import re
+import time
 import random
 from scipy.stats import norm, poisson, nbinom, gamma, weibull_min, lognorm, expon, beta, kstest, anderson
 from statsmodels.genmod.families import Poisson, NegativeBinomial
@@ -803,6 +804,7 @@ def run_monte_carlo_simulation(N, *args):
     my_bar = st.progress(0, text=progress_text.format(N=N))
 
     for i in range(N):
+        time.sleep(0.01)
         inventory_history, proactive_inventory_history, stockout_weeks, proactive_stockout_weeks, wos_history, proactive_wos_history, consumption_history, weekly_events = simulate_inventory(*args)
 
         all_inventory_histories.append(inventory_history)
@@ -817,7 +819,7 @@ def run_monte_carlo_simulation(N, *args):
         # Update progress bar
         my_bar.progress((i + 1) / N, text=f"Running simulation: {i + 1} out of {N}")
         
-
+    time.sleep(1)
     # Remove progress bar when done
     my_bar.empty()
 
