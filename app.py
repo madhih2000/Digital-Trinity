@@ -493,10 +493,10 @@ elif tabs == "Inventory Simulation":
                 fig_inventory.update_layout(yaxis_title='Inventory')
 
                 # Highlight stockout weeks
-                if stockout_weeks:
-                    fig_inventory.add_vrect(x0=min(stockout_weeks), x1=max(stockout_weeks), fillcolor="red", opacity=0.25, line_width=0, annotation_text="Stockout Weeks", annotation_position="top left")
-                if proactive_stockout_weeks:
-                    fig_inventory.add_vrect(x0=min(proactive_stockout_weeks), x1=max(proactive_stockout_weeks), fillcolor="orange", opacity=0.25, line_width=0, annotation_text="Proactive Stockout Weeks", annotation_position="top right")
+                if representative_stockout_weeks:
+                    fig_inventory.add_vrect(x0=min(representative_stockout_weeks), x1=max(representative_stockout_weeks), fillcolor="red", opacity=0.25, line_width=0, annotation_text="Stockout Weeks", annotation_position="top left")
+                if representative_stockout_weeks_proactive:
+                    fig_inventory.add_vrect(x0=min(representative_stockout_weeks_proactive), x1=max(representative_stockout_weeks_proactive), fillcolor="orange", opacity=0.25, line_width=0, annotation_text="Proactive Stockout Weeks", annotation_position="top right")
 
                 st.plotly_chart(fig_inventory)
 
@@ -505,10 +505,10 @@ elif tabs == "Inventory Simulation":
                 fig_wos.update_layout(yaxis_title='Weeks of Supply')
 
                 # Highlight stockout weeks
-                if stockout_weeks:
-                    fig_wos.add_vrect(x0=min(stockout_weeks), x1=max(stockout_weeks), fillcolor="red", opacity=0.25, line_width=0, annotation_text="Stockout Weeks", annotation_position="top left")
-                if proactive_stockout_weeks:
-                    fig_wos.add_vrect(x0=min(proactive_stockout_weeks), x1=max(proactive_stockout_weeks), fillcolor="orange", opacity=0.25, line_width=0, annotation_text="Proactive Stockout Weeks", annotation_position="top right")
+                if representative_stockout_weeks:
+                    fig_wos.add_vrect(x0=min(representative_stockout_weeks), x1=max(representative_stockout_weeks), fillcolor="red", opacity=0.25, line_width=0, annotation_text="Stockout Weeks", annotation_position="top left")
+                if representative_stockout_weeks_proactive:
+                    fig_wos.add_vrect(x0=min(representative_stockout_weeks_proactive), x1=max(representative_stockout_weeks_proactive), fillcolor="orange", opacity=0.25, line_width=0, annotation_text="Proactive Stockout Weeks", annotation_position="top right")
 
                 st.plotly_chart(fig_wos)
 
@@ -519,16 +519,16 @@ elif tabs == "Inventory Simulation":
                 st.plotly_chart(fig_consumption)
 
                 # Display stockout information
-                if stockout_weeks:
-                    st.warning(f"Reactive stockout occurred in weeks: {', '.join(map(str, stockout_weeks))}")
+                if representative_stockout_weeks:
+                    st.warning(f"Reactive stockout occurred in weeks: {', '.join(map(str, representative_stockout_weeks))}")
                 else:
                     st.success("No reactive stockouts occurred.")
 
-                if proactive_stockout_weeks:
-                    st.warning(f"Proactive stockout occurred in weeks: {', '.join(map(str, proactive_stockout_weeks))}")
+                if representative_stockout_weeks_proactive:
+                    st.warning(f"Proactive stockout occurred in weeks: {', '.join(map(str, representative_stockout_weeks_proactive))}")
                 else:
                     st.success("No proactive stockouts occurred.")
+
                 st.subheader("Weekly Simulation Events after Monte Carlo")
                 for event in representative_weekly_events:
                     st.markdown(event)
-                
