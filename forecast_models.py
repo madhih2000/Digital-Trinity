@@ -30,7 +30,7 @@ def forecast_weekly_consumption_xgboost(df, forecast_weeks_ahead=6, seasonality=
     df_material = df_material[weeks]
     weekly_data = df_material.transpose().reset_index()
     weekly_data.columns = ['week', 'consumption']
-    weekly_data['week'] = weekly_data['week'].str.extract('(\d+)').astype(int)
+    weekly_data['week'] = weekly_data['week'].str.extract(r'(\d+)').astype(int)
     weekly_data = weekly_data.sort_values('week')
 
     weekly_data['year'] = 2024
@@ -126,7 +126,7 @@ def forecast_weekly_consumption_xgboost_v2(df, forecast_weeks_ahead=6, seasonali
     df_material = df_material[weeks]
     weekly_data = df_material.transpose().reset_index()
     weekly_data.columns = ['week', 'consumption']
-    weekly_data['week'] = weekly_data['week'].str.extract('(\d+)').astype(int)
+    weekly_data['week'] = weekly_data['week'].str.extract(r'(\d+)').astype(int)
     weekly_data = weekly_data.sort_values('week')
 
     weekly_data['year'] = 2024
@@ -220,7 +220,7 @@ def forecast_weekly_consumption_xgboost_v3(df, external_df, forecast_weeks_ahead
     df_material = df_material[weeks]
     weekly_data = df_material.transpose().reset_index()
     weekly_data.columns = ['week', 'consumption']
-    weekly_data['week'] = weekly_data['week'].str.extract('(\d+)').astype(int)
+    weekly_data['week'] = weekly_data['week'].str.extract(r'(\d+)').astype(int)
     weekly_data = weekly_data.sort_values('week')
 
     weekly_data['year'] = 2024
@@ -395,7 +395,7 @@ def plot_acf_pacf_material_consumption(df, mat_number):
     # Create a DataFrame with weeks as the index
     weekly_data = df_material.transpose().reset_index()
     weekly_data.columns = ['week', 'consumption']
-    weekly_data['week'] = weekly_data['week'].str.extract('(\d+)').astype(int)
+    weekly_data['week'] = weekly_data['week'].str.extract(r'(\d+)').astype(int)
 
     # Sort data by week
     weekly_data = weekly_data.sort_values('week')
@@ -653,7 +653,7 @@ def forecast_weekly_consumption_arima_v2(df, external_df, forecast_weeks_ahead=6
     df_material = df_material[weeks]
     weekly_data = df_material.transpose().reset_index()
     weekly_data.columns = ['week', 'consumption']
-    weekly_data['week'] = weekly_data['week'].str.extract('(\d+)').astype(int)
+    weekly_data['week'] = weekly_data['week'].str.extract(r'(\d+)').astype(int)
 
     weekly_data['year'] = 2024
 
