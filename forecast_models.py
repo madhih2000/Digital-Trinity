@@ -320,9 +320,9 @@ def forecast_weekly_consumption_xgboost_v3(df, external_df, forecast_weeks_ahead
     #Ensure the week column is an int.
     forecast_results_df['week'] = forecast_results_df['week'].astype(int)
 
-    # Plotting
-    plt.figure(figsize=(12, 6))
-    # Create year-week labels for actual data
+    # # Plotting
+    # plt.figure(figsize=(12, 6))
+    # # Create year-week labels for actual data
     if 'year' in X_old.columns:
         actual_labels = [f"{year} - {week}" for year, week in zip(X_old['year'], X_old['week'])]
     else:
@@ -331,30 +331,30 @@ def forecast_weekly_consumption_xgboost_v3(df, external_df, forecast_weeks_ahead
         except:
             raise ValueError("X_old must contain a 'year' column or a datetime index.")
 
-    # Create year-week labels for forecasted data
+    # # Create year-week labels for forecasted data
     if 'year' in forecast_results_df.columns:
         forecast_labels = [f"{year} - {week}" for year, week in zip(forecast_results_df['year'], forecast_results_df['week'])]
     else:
         forecast_labels = [f"2025 - {week}" for week in forecast_results_df['week'] ] #default to 2025 if no year col.
 
-    # Combine labels for setting x-ticks
-    all_labels = actual_labels + forecast_labels
+    # # Combine labels for setting x-ticks
+    # all_labels = actual_labels + forecast_labels
 
-    plt.plot(actual_labels, y_old, label='Actual Consumption', color='blue')
-    plt.plot(forecast_labels, forecast_results_df['predicted_consumption'], label='Forecasted Consumption', linestyle='dashed', color='red')
+    # plt.plot(actual_labels, y_old, label='Actual Consumption', color='blue')
+    # plt.plot(forecast_labels, forecast_results_df['predicted_consumption'], label='Forecasted Consumption', linestyle='dashed', color='red')
 
-    plt.xlabel('Year - Week')
-    plt.ylabel('Consumption')
-    plt.title(f'Recursive Consumption Forecasting for Material {material_number}')
-    plt.legend()
+    # plt.xlabel('Year - Week')
+    # plt.ylabel('Consumption')
+    # plt.title(f'Recursive Consumption Forecasting for Material {material_number}')
+    # plt.legend()
 
-    # Set x-ticks and labels, showing only every x_label_step labels
-    plt.xticks(range(0, len(all_labels), 4), all_labels[::4], rotation=45, ha='right')
+    # # Set x-ticks and labels, showing only every x_label_step labels
+    # plt.xticks(range(0, len(all_labels), 4), all_labels[::4], rotation=45, ha='right')
 
-    plt.xticks(rotation=45, ha='right')
-    plt.tight_layout()
+    # plt.xticks(rotation=45, ha='right')
+    # plt.tight_layout()
 
-    return forecast_results_df, plt
+    return forecast_results_df
 
 
 def plot_acf_pacf_material_consumption(df, mat_number):
