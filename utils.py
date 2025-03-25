@@ -77,5 +77,37 @@ def load_data(file):
     return df
 
 def load_forecast_consumption_data(file):
+
     df = pd.read_excel(file)
-    return df
+
+    # Define required columns
+    required_columns = {'Material Number', 'Pstng Date', 'Quantity'}
+    
+    # Check if all required columns are present
+    if not required_columns.issubset(df.columns):
+        missing = required_columns - set(df.columns)
+        raise ValueError(f"Missing columns in the data: {', '.join(missing)}")
+    
+    
+    # Convert posting date to datetime
+    df['Pstng Date'] = pd.to_datetime(df['Pstng Date'])
+    
+    # Extract the ISO week number
+    df['Week'] = df['Pstng Date'].dt.isocalendar().week
+
+    # Take absolute of Quantity before grouping
+    df['Quantity'] = df['Quantity'].abs()
+    
+    # Group by Material Number and Week, summing the quantity
+    grouped = df.groupby(['Material Number', 'Week'])['Quantity'].sum().reset_index()
+    
+    # Pivot the table to have weeks as columns
+    pivot_df = grouped.pivot(index='Material Number', columns='Week', values='Quantity').fillna(0)
+    
+    # Rename the week columns to WW1_Consumption, WW2_Consumption, ..., WW52_Consumption
+    pivot_df.columns = [f'WW{week}_Consumption' for week in pivot_df.columns]
+    
+    # Reset index to bring 'Material Number' back as a column
+    result_df = pivot_df.reset_index()
+    
+    return result_df
