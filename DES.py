@@ -798,9 +798,13 @@ def run_monte_carlo_simulation(N, *args):
     all_consumption_histories = []
     all_weekly_events = []
 
-    for _ in range(N):
+    # Create a progress bar
+    progress_text = "Running simulation: 0 out of {N}"
+    my_bar = st.progress(0, text=progress_text.format(N=N))
+
+    for i in range(N):
         inventory_history, proactive_inventory_history, stockout_weeks, proactive_stockout_weeks, wos_history, proactive_wos_history, consumption_history, weekly_events = simulate_inventory(*args)
-        #inventory_history, stockout_weeks, wos_history, consumption_history, weekly_events = simulate_inventory(*args)
+
         all_inventory_histories.append(inventory_history)
         all_proactive_inventory_histories.append(proactive_inventory_history)
         all_stockout_weeks.append(stockout_weeks)
@@ -809,6 +813,13 @@ def run_monte_carlo_simulation(N, *args):
         all_proactive_wos_histories.append(proactive_wos_history)
         all_consumption_histories.append(consumption_history)
         all_weekly_events.append(weekly_events)
+
+        # Update progress bar
+        my_bar.progress((i + 1) / N, text=f"Running simulation: {i + 1} out of {N}")
+        
+
+    # Remove progress bar when done
+    my_bar.empty()
 
     return (
         all_inventory_histories,
