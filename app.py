@@ -16,6 +16,7 @@ import goods_receipt_utils
 import forecast_models
 import lead_time_analysis
 import DES
+import llm_reasoning
 
 # Set the page config with the title centered
 st.set_page_config(page_title="Micron SupplySense", layout="wide")
@@ -364,7 +365,8 @@ elif tabs == "Inventory Simulation":
             # Consumption Input
             consumption_type = st.radio("Consumption Type", ["Fixed", "Distribution"])
             consumption_values = []
-            consumption_distribution_params = None  # Initialize to avoid potential errors later
+            consumption_distribution_params = None  
+            consumption_best_distribution = "Fixed"
             safety_stock = 0
             if consumption_type == "Fixed":
                 fixed_consumption = st.number_input("Fixed Consumption Value", min_value=0, value=10)
@@ -389,14 +391,13 @@ elif tabs == "Inventory Simulation":
 
             else:  # Consumption Type is "Distribution"
                 consumption_values = filtered_consumption.iloc[:, 3:].values.flatten()
-                consumption_distribution_params  = DES.fit_distribution(consumption_values, "Consumption")
-
+                consumption_distribution_params, consumption_best_distribution  = DES.fit_distribution(consumption_values, "Consumption")
                 mean_consumption = DES.get_mean_from_distribution(consumption_distribution_params)
                 std_consumption = DES.get_std_from_distribution(consumption_distribution_params)
                 if consumption_distribution_params:
                     simulated_demand = DES.simulate_demand(consumption_distribution_params)
                     lead_time_values = filtered_merged.filter(like="Lead Time").iloc[0].dropna().astype(float)
-                    lead_time_distribution_params  = DES.fit_distribution(lead_time_values, "Lead Time")
+                    lead_time_distribution_params, lead_time_best_distribution  = DES.fit_distribution(lead_time_values, "Lead Time")
                     simulated_lead_times = DES.simulate_demand(lead_time_distribution_params)
 
                 service_level_percentage = st.number_input("Desired Service Level (%)", min_value=1, max_value=100, value=95)
@@ -434,13 +435,13 @@ elif tabs == "Inventory Simulation":
             order_quantity_type = st.radio("Order Quantity Type", ["Fixed", "Distribution"])
             order_quantity = 0
             order_distribution_params = None
+            order_distribution_best = "Fixed Distribution"
 
             if order_quantity_type == "Fixed":
                 order_quantity = st.number_input("Order Quantity", min_value=10, max_value=10000, value=50)
             else:  # Order Quantity Type is "Distribution"
                 order_values = filtered_orders.iloc[:, 3:].values.flatten()
-                order_distribution_params = DES.fit_distribution(order_values, "Order Quantity")
-                
+                order_distribution_params, order_distribution_best = DES.fit_distribution(order_values, "Order Quantity")
 
         with col3:
             lead_time_std_dev = st.number_input("Lead Time Std Dev (weeks)", min_value=0.0, max_value=10.0, value=float(std_lead_time))
@@ -533,5 +534,7 @@ elif tabs == "Inventory Simulation":
                     st.success("No proactive stockouts occurred.")
 
                 st.subheader("Weekly Simulation Events after Monte Carlo")
-                for event in representative_weekly_events:
-                    st.markdown(event)
+                # for event in representative_weekly_events:
+                #     st.markdown(event)
+
+                llm_reasoning.explain_inventory_events(representative_weekly_events, reorder_point, lead_time, lead_time_std_dev, consumption_distribution_params, consumption_type,consumption_best_distribution, order_distribution_params, order_quantity_type, order_distribution_best)

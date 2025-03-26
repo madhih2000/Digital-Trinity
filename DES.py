@@ -520,11 +520,11 @@ def fit_distribution(data_values, data_type="Consumption"):
             st.warning(f"Could not find a suitable distribution for {data_type}.")
             return None
 
-        return distribution_params
+        return distribution_params, best_distribution
 
     except Exception as e:
         st.error(f"Error fitting distributions for {data_type}: {e}")
-        return None
+        return None, None
 
 
 # Inventory Simulation
