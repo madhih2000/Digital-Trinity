@@ -821,7 +821,7 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
     consumption_history = []
     weeks = list(range(1, num_weeks + 1))
     weekly_events = []
-    logging.info("Simulation started.")
+    streamlit_root_logger.info("Simulation started.")
 
     for i, week in enumerate(weeks):
         logging.info(f"Week {week} - Starting Inventory (Reactive): {inventory}, (Proactive): {proactive_inventory}")
