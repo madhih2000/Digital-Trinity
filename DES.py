@@ -19,6 +19,11 @@ from statsmodels.tsa.stattools import adfuller
 
 import forecast_models
 
+# If you're curious of all the loggers
+print(streamlit.logger._loggers)  
+
+streamlit_root_logger = logging.getLogger(streamlit.__name__)
+
 def load_data(uploaded_file):
     """Loads data from an uploaded Excel file."""
     try:
