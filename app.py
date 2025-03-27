@@ -419,8 +419,9 @@ elif tabs == "Inventory Simulation":
                 simulated_stock_levels = simulated_lead_times * simulated_demand
                 # Calculate safety stock as the percentile of the simulated stock levels based on the service level
                 safety_stock = np.percentile(simulated_stock_levels, service_level)
+                safety_stock = int(safety_stock)
 
-                st.success(f"Calculated Safety Stock: {safety_stock:.2f} units")
+                st.success(f"Calculated Safety Stock: {safety_stock} units")
 
                 lead_time_demand = mean_consumption * max_lead_time
                 # 2. Calculate Reorder Point
