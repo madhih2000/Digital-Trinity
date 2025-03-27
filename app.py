@@ -321,37 +321,47 @@ elif tabs == "Inventory Simulation":
         merged_df = st.session_state["merged_df"]
 
     if "consumption_df" in st.session_state and "order_df" in st.session_state and "gr_df" in st.session_state and "merged_df" in st.session_state:
-        # consumption_df = DES.load_data(uploaded_consumption)
+
         consumption_df = DES.preprocess_data_consumption(consumption_df)
-        # gr_df = DES.load_data(uploaded_goods_receipt)
+ 
         gr_df = DES.preprocess_data_GR(gr_df)
-        # order_df = DES.load_data(uploaded_order_placement)
+
         order_df = DES.preprocess_data_OP(order_df)
-        # merged_df = DES.load_data(uploaded_merged)
+
+        # Find common material numbers across all DataFrames
+        common_materials = set(consumption_df['Material Number'].unique()) & \
+                        set(order_df['Material Number'].unique()) & \
+                        set(gr_df['Material Number'].unique()) & \
+                        set(merged_df['Material Number'].unique())
+
+        if not common_materials:
+            st.warning("No common material numbers found across all DataFrames. Please check the data.")
+        
 
         col1, col2, col3 = st.columns(3)
 
         # Filtering Data Before Running Simulation
         with col1:
-            selected_material = st.selectbox("Select Material", consumption_df['Material Number'].unique())
+            selected_material = st.selectbox("Select Material", list(common_materials))
+            material_specific_consumption_df = consumption_df[consumption_df['Material Number'] == selected_material]
             
         with col2:
-            selected_plant = st.selectbox("Select Plant", consumption_df['Plant'].unique())
+            selected_plant = st.selectbox("Select Plant", material_specific_consumption_df['Plant'].unique())
 
         with col3:
-            selected_site = st.selectbox("Select Site", consumption_df['Site'].unique())
+            selected_site = st.selectbox("Select Site", material_specific_consumption_df['Site'].unique())
 
         filtered_consumption = consumption_df[(consumption_df['Material Number'] == selected_material) & 
                                         (consumption_df['Plant'] == selected_plant) & 
-                                        (consumption_df['Site'] == selected_site)]
+                                        (consumption_df['Site'] == selected_site)].reset_index(drop=True)
         filtered_orders = order_df[(order_df['Material Number'] == selected_material) & 
-                                (order_df['Plant'] == selected_plant)]
+                                (order_df['Plant'] == selected_plant)].reset_index(drop=True)
         filtered_receipts = gr_df[(gr_df['Material Number'] == selected_material) & 
                                     (gr_df['Plant'] == selected_plant) & 
-                                    (gr_df['Site'] == selected_site)]
+                                    (gr_df['Site'] == selected_site)].reset_index(drop=True)
         filtered_merged = merged_df[(merged_df['Material Number'] == selected_material) & 
                                     (merged_df['Plant'] == selected_plant) & 
-                                    (merged_df['Site'] == selected_site) & (merged_df['Measures'] == 'Supply')]
+                                    (merged_df['Site'] == selected_site) & (merged_df['Measures'] == 'Supply')].reset_index(drop=True)
         
         max_lead_time, std_lead_time, dist_name, dist_params = DES.process_lead_time(filtered_merged)
 
@@ -366,7 +376,7 @@ elif tabs == "Inventory Simulation":
             consumption_type = st.radio("Consumption Type", ["Fixed", "Distribution"])
             consumption_values = []
             consumption_distribution_params = None  
-            consumption_best_distribution = "Fixed"
+            consumption_best_distribution = None
             safety_stock = 0
             if consumption_type == "Fixed":
                 fixed_consumption = st.number_input("Fixed Consumption Value", min_value=0, value=10)
@@ -377,8 +387,8 @@ elif tabs == "Inventory Simulation":
                 std_dlt = np.sqrt(max_lead_time) * np.std(consumption_values)
                 z_score = stats.norm.ppf(service_level)
                 safety_stock = z_score * std_dlt
-
-                st.success(f"Calculated Safety Stock: {safety_stock:.2f} units")
+                safety_stock = int(safety_stock)
+                st.success(f"Calculated Safety Stock: {safety_stock} units")
 
                 average_consumption = np.mean(consumption_values)
                 lead_time_demand = average_consumption * max_lead_time
@@ -392,13 +402,13 @@ elif tabs == "Inventory Simulation":
             else:  # Consumption Type is "Distribution"
                 consumption_values = filtered_consumption.iloc[:, 3:].values.flatten()
                 consumption_distribution_params, consumption_best_distribution  = DES.fit_distribution(consumption_values, "Consumption")
-                mean_consumption = DES.get_mean_from_distribution(consumption_distribution_params)
-                std_consumption = DES.get_std_from_distribution(consumption_distribution_params)
+                mean_consumption = DES.get_mean_from_distribution(consumption_best_distribution, consumption_distribution_params)
+                std_consumption = DES.get_std_from_distribution(consumption_best_distribution, consumption_distribution_params)
                 if consumption_distribution_params:
-                    simulated_demand = DES.simulate_demand(consumption_distribution_params)
+                    simulated_demand = DES.simulate_demand(consumption_best_distribution, consumption_distribution_params)
                     lead_time_values = filtered_merged.filter(like="Lead Time").iloc[0].dropna().astype(float)
-                    lead_time_distribution_params, lead_time_best_distribution  = DES.fit_distribution(lead_time_values, "Lead Time")
-                    simulated_lead_times = DES.simulate_demand(lead_time_distribution_params)
+                    lead_time_distribution_params, lead_time_best_distribution  = DES.fit_distribution_lead_time(lead_time_values, "Lead Time")
+                    simulated_lead_times = DES.simulate_demand(lead_time_best_distribution, lead_time_distribution_params)
 
                 service_level_percentage = st.number_input("Desired Service Level (%)", min_value=1, max_value=100, value=95)
                 service_level = service_level_percentage / 100.0
@@ -413,13 +423,12 @@ elif tabs == "Inventory Simulation":
                 st.success(f"Calculated Safety Stock: {safety_stock:.2f} units")
 
                 lead_time_demand = mean_consumption * max_lead_time
-
                 # 2. Calculate Reorder Point
                 reorder_pt_calc = lead_time_demand + safety_stock
                 try:
-                    reorder_point = st.number_input("Reorder Point", min_value=5, max_value=500, value=int(reorder_pt_calc))
+                    reorder_point = st.number_input("Reorder Point", min_value=5, max_value=10000, value=int(reorder_pt_calc))
                 except Exception:
-                    reorder_point = st.number_input("Reorder Point", min_value=5, max_value=500, value=100)
+                    reorder_point = st.number_input("Reorder Point", min_value=5, max_value=10000, value=100)
                 st.info("The inventory level at which a new order is placed.")
 
         with col2:
@@ -450,12 +459,12 @@ elif tabs == "Inventory Simulation":
             demand_surge_factor = st.number_input("Demand Surge Factor", min_value=0.5, max_value=5.0, value=2.0, step=0.1)
             st.info("Enter the factor by which demand will increase during the selected weeks. (e.g., 2.0 doubles demand)")
 
-            N = st.number_input("Number of Monte Carlo Simulations", min_value=1, max_value=10000, value=100)
+            N = st.number_input("Number of Monte Carlo Simulations", min_value=1, max_value=10000, value=10)
             st.info("The number of Monte Carlo simulations to run. A higher number provides more accurate results but requires more computation.")
 
         if st.button("Run Simulation"):
             with st.spinner("Running simulation..."):
-                args = (filtered_consumption, filtered_orders, filtered_receipts, initial_inventory, reorder_point, order_quantity, lead_time, lead_time_std_dev, demand_surge_weeks_input, demand_surge_factor, consumption_distribution_params, consumption_type, consumption_values, num_weeks, order_distribution_params, order_quantity_type)
+                args = (filtered_consumption, filtered_orders, filtered_receipts, initial_inventory, reorder_point, order_quantity, lead_time, lead_time_std_dev, demand_surge_weeks_input, demand_surge_factor, consumption_distribution_params, consumption_type, consumption_best_distribution, consumption_values, num_weeks, order_distribution_params, order_distribution_best, order_quantity_type)
 
                 # Run Monte Carlo simulation
                 
@@ -491,28 +500,81 @@ elif tabs == "Inventory Simulation":
                     'Consumption': representative_consumption
                 })
 
-                # Visualization
-                fig_inventory = px.line(inventory_df, x='Working Week', y=['Reactive Inventory', 'Proactive Inventory'], title='Inventory Over Time')
-                fig_inventory.update_xaxes(dtick=5)
-                fig_inventory.update_layout(yaxis_title='Inventory')
+                # Create figure using px
+                fig_inventory = px.line(
+                    inventory_df, x="Working Week", y=["Reactive Inventory", "Proactive Inventory"],
+                    title="Inventory Over Time", labels={"value": "Inventory", "variable": "Type"}
+                )
 
-                # Highlight stockout weeks
-                if representative_stockout_weeks:
-                    fig_inventory.add_vrect(x0=min(representative_stockout_weeks), x1=max(representative_stockout_weeks), fillcolor="red", opacity=0.25, line_width=0, annotation_text="Stockout Weeks", annotation_position="top left")
-                if representative_stockout_weeks_proactive:
-                    fig_inventory.add_vrect(x0=min(representative_stockout_weeks_proactive), x1=max(representative_stockout_weeks_proactive), fillcolor="orange", opacity=0.25, line_width=0, annotation_text="Proactive Stockout Weeks", annotation_position="top right")
+                fig_inventory.update_xaxes(dtick=5)
+
+                # Add shaded vertical rectangles for stockout weeks
+                for week in representative_stockout_weeks:
+                    fig_inventory.add_vrect(
+                        x0=week - 0.5, x1=week + 0.5,  # Small padding to make it visible
+                        fillcolor="red", opacity=0.25, line_width=0
+                    )
+
+                for week in representative_stockout_weeks_proactive:
+                    fig_inventory.add_vrect(
+                        x0=week - 0.5, x1=week + 0.5,
+                        fillcolor="orange", opacity=0.25, line_width=0
+                    )
+
+                # Simulating legend for stockout weeks using dummy scatter points
+                legend_df = pd.DataFrame({
+                    "Working Week": [None, None],  # Invisible points
+                    "Inventory": [None, None],
+                    "Type": ["Reactive Stockout Weeks", "Proactive Stockout Weeks"]
+                })
+
+                fig_legend = px.scatter(
+                    legend_df, x="Working Week", y="Inventory", color="Type",
+                    color_discrete_map={"Reactive Stockout Weeks": "red", "Proactive Stockout Weeks": "orange"}
+                )
+
+                # Add legend traces to the main figure
+                for trace in fig_legend.data:
+                    fig_inventory.add_trace(trace)
 
                 st.plotly_chart(fig_inventory)
 
-                fig_wos = px.line(wos_df, x='Working Week', y=['Reactive WoS', 'Proactive WoS'], title='Weeks of Supply (WoS) Over Time')
-                fig_wos.update_xaxes(dtick=5)
-                fig_wos.update_layout(yaxis_title='Weeks of Supply')
+                fig_wos = px.line(
+                    wos_df, x="Working Week", y=["Reactive WoS", "Proactive WoS"],
+                    title="Weeks of Supply (WoS) Over Time", labels={"value": "WoS", "variable": "Type"}
+                )
 
-                # Highlight stockout weeks
-                if representative_stockout_weeks:
-                    fig_wos.add_vrect(x0=min(representative_stockout_weeks), x1=max(representative_stockout_weeks), fillcolor="red", opacity=0.25, line_width=0, annotation_text="Stockout Weeks", annotation_position="top left")
-                if representative_stockout_weeks_proactive:
-                    fig_wos.add_vrect(x0=min(representative_stockout_weeks_proactive), x1=max(representative_stockout_weeks_proactive), fillcolor="orange", opacity=0.25, line_width=0, annotation_text="Proactive Stockout Weeks", annotation_position="top right")
+                fig_wos.update_xaxes(dtick=5)
+                fig_wos.update_layout(yaxis_title="Weeks of Supply")
+
+                # Add shaded vertical rectangles for stockout weeks
+                for week in representative_stockout_weeks:
+                    fig_wos.add_vrect(
+                        x0=week - 0.5, x1=week + 0.5,
+                        fillcolor="red", opacity=0.25, line_width=0
+                    )
+
+                for week in representative_stockout_weeks_proactive:
+                    fig_wos.add_vrect(
+                        x0=week - 0.5, x1=week + 0.5,
+                        fillcolor="orange", opacity=0.25, line_width=0
+                    )
+
+                # Simulating legend for stockout weeks using dummy scatter points
+                legend_df = pd.DataFrame({
+                    "Working Week": [None, None],  # Invisible points
+                    "WoS": [None, None],
+                    "Type": ["Reactive Stockout Weeks", "Proactive Stockout Weeks"]
+                })
+
+                fig_legend = px.scatter(
+                    legend_df, x="Working Week", y="WoS", color="Type",
+                    color_discrete_map={"Reactive Stockout Weeks": "red", "Proactive Stockout Weeks": "orange"}
+                )
+
+                # Add legend traces to the main figure
+                for trace in fig_legend.data:
+                    fig_wos.add_trace(trace)
 
                 st.plotly_chart(fig_wos)
 
@@ -536,5 +598,8 @@ elif tabs == "Inventory Simulation":
                 st.subheader("Weekly Simulation Events after Monte Carlo")
                 # for event in representative_weekly_events:
                 #     st.markdown(event)
+
+                weekly_table = DES.extract_weekly_table(representative_weekly_events)
+                st.write(weekly_table)
 
                 llm_reasoning.explain_inventory_events(representative_weekly_events, reorder_point, lead_time, lead_time_std_dev, consumption_distribution_params, consumption_type,consumption_best_distribution, order_distribution_params, order_quantity_type, order_distribution_best)
