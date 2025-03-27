@@ -584,6 +584,7 @@ def fit_distribution(data_values, data_type="Consumption"):
             best_distribution_name = best_distribution_name_bic
             best_distribution_params = best_distribution_params_bic
         
+        best_distribution_params = tuple(map(float, best_distribution_params))
         # Display the best distribution and parameters
         st.success(f"Best {data_type} Distribution: {best_distribution_name} with parameters: {best_distribution_params}")
         
