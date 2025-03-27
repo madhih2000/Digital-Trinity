@@ -7,6 +7,9 @@ import re
 import time
 import random
 
+import psutil
+import os
+
 from scipy.stats import norm, poisson, nbinom, gamma, weibull_min, lognorm, expon, beta, kstest, anderson
 from statsmodels.genmod.families import Poisson, NegativeBinomial
 from statsmodels.discrete.count_model import ZeroInflatedPoisson, ZeroInflatedNegativeBinomialP
@@ -529,6 +532,8 @@ def fit_distribution(data_values, data_type="Consumption"):
 
 # Inventory Simulation
 def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts, initial_inventory, reorder_point, order_quantity, lead_time, lead_time_std_dev, demand_surge_weeks, demand_surge_factor, consumption_distribution_params, consumption_type, consumption_values, num_weeks, order_distribution_params, order_quantity_type):
+    process = psutil.Process(os.getpid())
+    memory_usage_points = []
 
     inventory = initial_inventory
     orders_pending = {}
@@ -546,6 +551,11 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
     weeks = list(range(1, num_weeks + 1))
     weekly_events = []
 
+    # Initial memory check
+    memory_usage_points.append(process.memory_info().rss)
+    print(f"Initial Memory Usage: {memory_usage_points[-1] / (1024 ** 2):.2f} MB")
+
+
     for i, week in enumerate(weeks):
         event_description = f"**Week {week}**\n"
         event_description += f"Starting Inventory (Reactive): {inventory}\n"
@@ -561,6 +571,10 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
             proactive_inventory += proactive_orders_pending[week]
             event_description += f"Proactive Order of {proactive_orders_pending[week]} arrived.\n"
             del proactive_orders_pending[week]
+
+        # Check memory usage after processing receipts
+        memory_usage_points.append(process.memory_info().rss)
+        print(f"Week {week} (After Receipts): {memory_usage_points[-1] / (1024 ** 2):.2f} MB")
 
 
         # Consumption
@@ -639,17 +653,17 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
         
         consumption_history.append(consumption_this_week)
         event_description += f"Consumption this week: {consumption_this_week} (Source: {consumption_source})\n"
-        # consumption_df_for_forecasting = pd.DataFrame({
-        #     'Year': [2025] * len(consumption_history),
-        #     'Week': [i + 1 for i in range(len(consumption_history))],
-        #     'Consumption': consumption_history
-        # })
+        consumption_df_for_forecasting = pd.DataFrame({
+            'Year': [2025] * len(consumption_history),
+            'Week': [i + 1 for i in range(len(consumption_history))],
+            'Consumption': consumption_history
+        })
 
-        # forecast_results_df = forecast_models.forecast_weekly_consumption_xgboost_v3(filtered_consumption, consumption_df_for_forecasting, int(lead_time))
-        # forecasted_values = forecast_results_df.predicted_consumption.values
-        # forecasted_values = forecasted_values[:-1]
-        # sum_of_forecasted_values = int(forecasted_values.sum())
-        sum_of_forecasted_values = 20
+        forecast_results_df = forecast_models.forecast_weekly_consumption_xgboost_v3(filtered_consumption, consumption_df_for_forecasting, int(lead_time))
+        forecasted_values = forecast_results_df.predicted_consumption.values
+        forecasted_values = forecasted_values[:-1]
+        sum_of_forecasted_values = int(forecasted_values.sum())
+        #sum_of_forecasted_values = 20
         event_description += f"Forecasted consumption for next {lead_time} weeks is {sum_of_forecasted_values}.\n"
 
         proactive_forecast = False
@@ -763,6 +777,11 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
                         order_quantity_to_use = max(1, int(expon.rvs(loc=order_distribution_params['loc'], scale=order_distribution_params['scale'], size=1)[0]))
                     elif order_distribution_params['distribution'] == 'Beta':
                         order_quantity_to_use = max(1, int(beta.rvs(a=order_distribution_params['a'], b=order_distribution_params['b'], loc=order_distribution_params['loc'], scale=order_distribution_params['scale'], size=1)[0]))
+            
+            # Check memory usage after forecasting
+            memory_usage_points.append(process.memory_info().rss)
+            print(f"Week {week} (After Forecasting): {memory_usage_points[-1] / (1024 ** 2):.2f} MB")
+
             average_consumption = np.max(order_values)
             order_quantity_to_use = min(average_consumption, order_quantity_to_use)
             order_arrival = int(i + lead_time + round(random.gauss(0, lead_time_std_dev)))
@@ -788,6 +807,14 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
         event_description += f"Proactive Ending Inventory: {proactive_inventory}\n"
         event_description += "---\n"
         weekly_events.append(event_description)
+
+        # Check memory usage at the end of the week
+        memory_usage_points.append(process.memory_info().rss)
+        print(f"Week {week} (End of Week): {memory_usage_points[-1] / (1024 ** 2):.2f} MB")
+    
+    # Print peak memory usage
+    peak_memory_usage = max(memory_usage_points)
+    print(f"Peak Memory Usage: {peak_memory_usage / (1024 ** 2):.2f} MB")
 
     return inventory_history, proactive_inventory_history, stockout_weeks, proactive_stockout_weeks, wos_history, proactive_wos_history, consumption_history, weekly_events
 
