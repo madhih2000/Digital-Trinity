@@ -19,11 +19,6 @@ from statsmodels.tsa.stattools import adfuller
 
 import forecast_models
 
-# If you're curious of all the loggers
-print(st.logger._loggers)  
-
-streamlit_root_logger = logging.getLogger(st.__name__)
-
 def load_data(uploaded_file):
     """Loads data from an uploaded Excel file."""
     try:
@@ -821,10 +816,10 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
     consumption_history = []
     weeks = list(range(1, num_weeks + 1))
     weekly_events = []
-    streamlit_root_logger.info("Simulation started.")
+    logging.warning("Simulation started.")
 
     for i, week in enumerate(weeks):
-        logging.info(f"Week {week} - Starting Inventory (Reactive): {inventory}, (Proactive): {proactive_inventory}")
+        logging.warning(f"Week {week} - Starting Inventory (Reactive): {inventory}, (Proactive): {proactive_inventory}")
         event_description = f"**Week {week}**\n"
         event_description += f"Starting Inventory (Reactive): {inventory}\n"
         event_description += f"Starting Inventory (Proactive): {proactive_inventory}\n"
@@ -832,13 +827,13 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
         # Add receipts
         if week in orders_pending:
             inventory += orders_pending[week]
-            logging.info(f"Reactive Order of {orders_pending[week]} arrived.")
+            logging.warning(f"Reactive Order of {orders_pending[week]} arrived.")
             event_description += f"Reactive Order of {orders_pending[week]} arrived.\n"
             del orders_pending[week]
 
         if week in proactive_orders_pending:
             proactive_inventory += proactive_orders_pending[week]
-            logging.info(f"Proactive Order of {proactive_orders_pending[week]} arrived.")
+            logging.warning(f"Proactive Order of {proactive_orders_pending[week]} arrived.")
             event_description += f"Proactive Order of {proactive_orders_pending[week]} arrived.\n"
             del proactive_orders_pending[week]
 
@@ -858,7 +853,7 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
         # Apply demand surge (override distribution)
         if f"WW{i + 1}" in demand_surge_weeks: 
             consumption_this_week = consumption_this_week * demand_surge_factor
-            logging.info(f"Demand surge applied: Consumption increased to {consumption_this_week}.")
+            logging.warning(f"Demand surge applied: Consumption increased to {consumption_this_week}.")
             event_description += f"Demand surge applied. Consumption increased by {demand_surge_factor}x.\n"
 
 
@@ -880,7 +875,7 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
 
         
         consumption_history.append(consumption_this_week)
-        logging.info(f"Consumption this week: {consumption_this_week}")
+        logging.warning(f"Consumption this week: {consumption_this_week}")
         event_description += f"Consumption this week: {consumption_this_week} (Source: {consumption_source})\n"
         consumption_df_for_forecasting = pd.DataFrame({
             'Year': [2025] * len(consumption_history),
@@ -892,7 +887,7 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
         forecasted_values = forecast_results_df.predicted_consumption.values
         forecasted_values = forecasted_values[:-1]
         sum_of_forecasted_values = int(forecasted_values.sum())
-        logging.info(f"Forecasted consumption for next {lead_time} weeks: {sum_of_forecasted_values}")
+        logging.warning(f"Forecasted consumption for next {lead_time} weeks: {sum_of_forecasted_values}")
         event_description += f"Forecasted consumption for next {lead_time} weeks is {sum_of_forecasted_values}.\n"
 
         proactive_forecast = False
@@ -905,7 +900,7 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
             order_arrival = int(i + lead_time + variation)
             if order_arrival < num_weeks:
                 proactive_orders_pending[weeks[order_arrival]] = order_quantity_to_use
-                logging.info(f"Proactive Order of {order_quantity_to_use} placed for week {weeks[order_arrival]}.")
+                logging.warning(f"Proactive Order of {order_quantity_to_use} placed for week {weeks[order_arrival]}.")
                 event_description += f"Proactive Order of {order_quantity_to_use} placed due to forecasted consumption. Arrival in week {weeks[order_arrival]}.\n"
                 proactive_forecast = True
         else:
@@ -947,7 +942,7 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
                 # Check if the proactive condition is met before adding to proactive_orders_pending
                 if proactive_inventory <= reorder_point and not proactive_forecast:
                     proactive_orders_pending[weeks[order_arrival]] = order_quantity_to_use
-                    logging.info(f"Proactive Order of {order_quantity_to_use} placed for week {weeks[order_arrival]} due to reorder point.")
+                    logging.warning(f"Proactive Order of {order_quantity_to_use} placed for week {weeks[order_arrival]} due to reorder point.")
                     event_description += f"Proactive Order of {order_quantity_to_use} placed due to reorder point. Arrival in week {weeks[order_arrival]}.\n"
                 
                 event_description += f"Reactive Order of {order_quantity_to_use} placed due to reorder point. Arrival in week {weeks[order_arrival]}.\n"
@@ -967,11 +962,11 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
         proactive_inventory_history.append(proactive_inventory)
         event_description += f"Reactive Ending Inventory: {inventory}\n"
         event_description += f"Proactive Ending Inventory: {proactive_inventory}\n"
-        logging.info(f"Week {week} - Ending Inventory (Reactive): {inventory}, (Proactive): {proactive_inventory}")
+        logging.warning(f"Week {week} - Ending Inventory (Reactive): {inventory}, (Proactive): {proactive_inventory}")
         event_description += "---\n"
         weekly_events.append(event_description)
     
-    logging.info("Simulation completed.")
+    logging.warning("Simulation completed.")
     return inventory_history, proactive_inventory_history, stockout_weeks, proactive_stockout_weeks, wos_history, proactive_wos_history, consumption_history, weekly_events
 
 def run_monte_carlo_simulation(N, *args):
