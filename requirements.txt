@@ -11,3 +11,4 @@ xgboost
 scikit-learn
 statsmodels
 fitter
+setuptools
