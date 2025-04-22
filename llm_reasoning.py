@@ -281,6 +281,7 @@ def explain_waterfall_chart_with_groq(df):
         )
 
         explanation = chat_completion.choices[0].message.content
+        st.header("Root Cause Analysis")
         st.write(explanation)
 
     except Exception as e:
