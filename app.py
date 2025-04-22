@@ -1,6 +1,10 @@
+import zipfile
 import streamlit as st
 import pandas as pd
 import numpy as np
+import os
+from io import BytesIO
+import tempfile
 import scipy.stats as stats
 from scipy.stats import norm, poisson, nbinom, gamma, weibull_min, lognorm, expon, beta, kstest, anderson
 
@@ -17,6 +21,7 @@ import forecast_models
 import lead_time_analysis
 import DES
 import llm_reasoning
+import waterfall_analysis
 
 # Set the page config with the title centered
 st.set_page_config(page_title="Micron SupplySense", layout="wide")
@@ -30,7 +35,7 @@ st.markdown(
 )
 
 # Create a sidebar for navigation (for a dashboard-style layout)
-tabs = st.sidebar.radio("Select an Analysis Type:", ["Material Consumption Analysis", "Order Placement Analysis", "Goods Receipt Analysis","Lead Time Analysis","Forecast Page", "Inventory Simulation"])
+tabs = st.sidebar.radio("Select an Analysis Type:", ["Material Consumption Analysis", "Order Placement Analysis", "Goods Receipt Analysis","Lead Time Analysis", "Forecast Demand", "Inventory Simulation", "Waterfall Analysis"])
 
 if tabs == "Material Consumption Analysis":
     st.title("Material Consumption Analysis")
@@ -175,11 +180,11 @@ elif tabs == "Test Page":
             elif 'Consumption' not in df.columns:
                 st.error("The uploaded file does not contain a 'Consumption' column.")
 
-elif tabs == "Forecast Page V2":
+elif tabs == "Forecast Demand":
     st.title("Forecast Model")
 
     # File uploader
-    uploaded_file = st.file_uploader("Upload Weekly Consumption Data Excel File for Analysis", type="xlsx")
+    uploaded_file = st.file_uploader("Upload Consumption Data Excel File for Analysis", type="xlsx")
 
     if uploaded_file:
         df = load_forecast_consumption_data(uploaded_file)  # Read the file
@@ -199,12 +204,11 @@ elif tabs == "Forecast Page V2":
                     forecast_results,plt = forecast_models.forecast_weekly_consumption_xgboost(filtered_df, forecast_weeks_ahead=forecast_weeks, seasonality=seasonality)
                     st.write("XGBoost Forecast Results:")
                     st.plotly_chart(plt)
-                    st.pyplot(plt)
                     st.write(forecast_results)
                 elif model_choice == "ARIMA":
                     forecast_results,plt = forecast_models.forecast_weekly_consumption_arima(filtered_df, forecast_weeks_ahead=forecast_weeks, seasonality=seasonality)
                     st.write("ARIMA Forecast Results:")
-                    st.pyplot(plt)
+                    st.plotly_chart(plt)
                     st.write(forecast_results)
 
         elif df is not None:
@@ -215,7 +219,7 @@ elif tabs == "Forecast Page V2":
             elif 'Consumption' not in df.columns:
                 st.error("The uploaded file does not contain a 'Consumption' column.")
 
-elif tabs == "Forecast Page":
+if tabs == "Forecast Page Old":
     st.title("Forecast Model")
 
     # File uploader
@@ -236,20 +240,18 @@ elif tabs == "Forecast Page":
 
             if st.button("Run Forecast"):
                 if model_choice == "XGBoost":
-                    forecast_results, plt = forecast_models.forecast_weekly_consumption_xgboost_plotly(
+                    forecast_results, plt = forecast_models.forecast_weekly_consumption_xgboost(
                         filtered_df, forecast_weeks_ahead=forecast_weeks, seasonality=seasonality
                     )
                     st.write("XGBoost Forecast Results:")
-                    st.plotly_chart(plt)
-                    #st.pyplot(plt)
+                    st.pyplot(plt)
                     st.write(forecast_results)
                 elif model_choice == "ARIMA":
-                    forecast_results, plt = forecast_models.forecast_weekly_consumption_arima_plotly(
+                    forecast_results, plt = forecast_models.forecast_weekly_consumption_arima(
                         filtered_df, forecast_weeks_ahead=forecast_weeks, seasonality=seasonality
                     )
                     st.write("ARIMA Forecast Results:")
-                    #st.pyplot(plt)
-                    st.plotly_chart(plt)
+                    st.pyplot(plt)
                     st.write(forecast_results)
 
         elif df is not None:
@@ -266,7 +268,7 @@ elif tabs == "Lead Time Analysis":
     # File uploader
     uploaded_file_op = st.file_uploader("Upload Order Placement Excel File for Analysis", type="xlsx")
     uploaded_file_gr = st.file_uploader("Upload Goods Received Excel File for Analysis", type="xlsx")
-    uploaded_file_sr = st.file_uploader("Upload Modified Shortage Report Excel File for Analysis", type="xlsx")
+    uploaded_file_sr = st.file_uploader("Upload Latest Shortage Report", type="xlsx")
 
     if uploaded_file_op and uploaded_file_gr and uploaded_file_sr:
         with st.spinner("Processing lead time analysis..."):
@@ -276,21 +278,222 @@ elif tabs == "Lead Time Analysis":
 
             matched, unmatched_op, unmatched_gr = lead_time_analysis.process_dataframes(op_df, gr_df)
             calculated_df = lead_time_analysis.calculate_actual_lead_time(matched)
-            final_df = lead_time_analysis.calculate_lead_time_summary(shortage_df)
+            final_df = lead_time_analysis.calculate_lead_time_summary_v2(shortage_df)
             final_result = lead_time_analysis.calculate_lead_time_differences(final_df, calculated_df)
 
+            # Option to pick Supplier from matched
+            if 'Supplier' in final_result.columns:
+                suppliers = final_result['Supplier'].unique().tolist()
+                selected_supplier = st.selectbox("Select Supplier (Optional)", ["All"] + suppliers)
+
+                if selected_supplier != "All":
+                    filtered_final_result = final_result[final_result['Supplier'] == selected_supplier]
+                else:
+                    filtered_final_result = final_result
+            else:
+                filtered_final_result = final_result
+                st.write("Supplier column not found in matched data.")
+
+            # Option to filter based on 'Pstng Date' (Received Date) from gr_df
+            if 'Pstng Date' in gr_df.columns:
+                min_date = gr_df['Pstng Date'].min().date()
+                max_date = gr_df['Pstng Date'].max().date()
+                selected_date_range = st.date_input("Filter By Goods Received Date", (min_date, max_date))
+
+                if len(selected_date_range) == 2:
+                    start_date, end_date = selected_date_range
+                    gr_df_filtered = gr_df[
+                        (gr_df['Pstng Date'].dt.date >= start_date) &
+                        (gr_df['Pstng Date'].dt.date <= end_date)
+                    ]
+                    #recalculate matched, and other dataframes based on filtered gr_df
+                    matched, unmatched_op, unmatched_gr = lead_time_analysis.process_dataframes(op_df, gr_df_filtered)
+                    calculated_df = lead_time_analysis.calculate_actual_lead_time(matched)
+                    final_result = lead_time_analysis.calculate_lead_time_differences(final_df, calculated_df)
+                    if 'Supplier' in final_result.columns:
+                        if selected_supplier != "All":
+                            filtered_final_result = final_result[final_result['Supplier'] == selected_supplier]
+                        else:
+                            filtered_final_result = final_result
+                            fig5, fig6, fig7 = lead_time_analysis.plot_supplier_lead_time_analysis(filtered_final_result)
+                    else:
+                        filtered_final_result = final_result
+                        st.write("Supplier column not found in matched data.")
+
+            else:
+                st.write("Pstng Date column not found in Goods Received data.")
+
             # Call the updated Plotly version of your function
-            fig1, fig2, fig3, fig4 = lead_time_analysis.analyze_and_plot_lead_time_differences_plotly(final_result)
+            fig1, fig2, fig3, fig4 = lead_time_analysis.analyze_and_plot_lead_time_differences_plotly(filtered_final_result)
+
 
         st.success("Lead Time Analysis Completed ✅")
-        st.write("### Lead Time Analysis Results:")
+        st.write("### Material Level Lead Time Analysis Results:")
         st.plotly_chart(fig1, use_container_width=True)
         st.plotly_chart(fig2, use_container_width=True)
         st.plotly_chart(fig3, use_container_width=True)
         st.plotly_chart(fig4, use_container_width=True)
+
+        if selected_supplier == "All":
+            st.markdown(
+                """
+                <style>
+                    .gradient-line {
+                        height: 10px;
+                        background: linear-gradient(to right, #0000FF, #008000);
+                        border: none;
+                        margin: 10px 0;
+                    }
+                </style>
+                <hr class="gradient-line">
+                """,
+                unsafe_allow_html=True
+            )
+            st.write("### Supplier Level Lead Time Analysis Results:")
+            st.plotly_chart(fig5, use_container_width=True)
+            st.plotly_chart(fig6, use_container_width=True)
+            st.plotly_chart(fig7, use_container_width=True)
+
+
+
+
     else:
         st.write("Please upload all Excel files to begin the analysis.")
 
+elif tabs == "Waterfall Analysis":
+    st.title("Waterfall Analysis")
+    uploaded_file = st.file_uploader("Upload ZIP file with 52 weeks of data (WW1.xlsx to WW52.xlsx)", type=["zip"])
+
+    if uploaded_file:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            zip_path = os.path.join(tmp_dir, "data.zip")
+            zip_filename = uploaded_file.name
+            zip_ext = os.path.splitext(zip_filename)[0]
+            with open(zip_path, "wb") as f:
+                f.write(uploaded_file.getvalue())
+
+            try:
+                with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                    zip_ref.extractall(tmp_dir)
+            except zipfile.BadZipFile:
+                st.error("❌ The uploaded file is not a valid ZIP.")
+
+            folder_path_zip = os.path.join(tmp_dir, zip_ext)
+
+            if not os.path.exists(folder_path_zip):
+                st.error(f"❌ Error: Folder '{folder_path_zip}' not found.")
+
+            xlsx_files = []
+            for root, dirs, files in os.walk(folder_path_zip):
+                for file in files:
+                    if file.endswith(".xlsx"):
+                        xlsx_files.append(os.path.relpath(os.path.join(root, file), folder_path_zip))
+
+            if not xlsx_files:
+                st.error("❌ Error: No XLSX files found in the ZIP.")
+
+            # Get just the filenames
+            all_files = [os.path.basename(f) for f in xlsx_files]
+
+            # Optional: Store full paths if needed later
+            file_paths = {os.path.basename(f): os.path.join(folder_path_zip, f) for f in xlsx_files}
+
+            # Expected 52 week files
+            expected_files = [f"WW{i}.xlsx" for i in range(1, 53)]
+
+            # Check which expected files are missing
+            missing_files = [f for f in expected_files if f not in all_files]
+            if missing_files:
+                st.error(f"❌ Missing files: {', '.join(missing_files)}")
+
+            # User inputs
+            start_week_str = st.selectbox("Select Start Week", [f"WW{i}" for i in range(2,53)])  # WW2 to WW52
+            if start_week_str:
+                start_week = int(start_week_str.replace("WW", ""))
+                # Get the weekly file path starting from start_week
+                selected_weeks = f"{start_week_str}.xlsx"
+
+                df = pd.read_excel(file_paths[selected_weeks])
+
+                if not df.empty:
+                    # Material dropdown
+                    material_options = sorted(df["Material Number"].dropna().unique())
+                    material_number = st.selectbox("Select Material Number", material_options)
+
+                    if material_number:
+                        plant_options = sorted(df[df["Material Number"] == material_number]["Plant"].dropna().unique())
+                        plant = st.selectbox("Select Plant", plant_options)
+
+                        if plant:
+                            site_options = sorted(
+                                df[
+                                    (df["Material Number"] == material_number) &
+                                    (df["Plant"] == plant)
+                                ]["Site"].dropna().unique()
+                            )
+                            site = st.selectbox("Select Site", site_options)
+
+                            num_weeks = st.number_input("Number of Weeks", min_value=1, max_value=52, value=12)
+
+                            # Submit button to extract & display data
+                            if st.button("Run Waterfall Analysis"):
+                                with st.spinner("Running Analysis..."):
+                                    result_df, lead_value = waterfall_analysis.extract_and_aggregate_weekly_data(
+                                        folder_path_zip, material_number, plant, site, start_week, int(num_weeks)
+                                    )
+
+
+                                    if result_df is not None and not result_df.empty:
+                                        st.success("✅ Data extracted successfully!")
+                                        st.markdown(
+                                            """
+                                            <style>
+                                                .gradient-line {
+                                                    height: 10px;
+                                                    background: linear-gradient(to right, #0000FF, #008000);
+                                                    border: none;
+                                                    margin: 10px 0;
+                                                }
+                                            </style>
+                                            <hr class="gradient-line">
+                                            """,
+                                            unsafe_allow_html=True
+                                        )
+                                        st.write("### Material Level Analysis:")
+
+                                        st.dataframe(result_df)
+
+                                        wos_list, analysis_plot = waterfall_analysis.plot_stock_prediction_plotly(result_df, start_week, lead_value, num_weeks)
+                                        st.plotly_chart(analysis_plot)
+
+                                        messages, order_needed = waterfall_analysis.check_wos_against_lead_time(wos_list, lead_value)
+
+                                        for message in messages:
+                                            st.write(message)
+
+                                        st.write(f"Immediate order needed: {order_needed}")
+
+                                        # Download button
+                                        output = BytesIO()
+                                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                                            result_df.to_excel(writer, index=False, sheet_name='Sheet1')
+                                        output.seek(0)
+
+                                        # Apply coloring
+                                        colored_output = waterfall_analysis.apply_coloring_to_output(output, lead_time=lead_value)
+
+                                        # Display download button
+                                        st.download_button(
+                                            label="📥 Download Excel File",
+                                            data=colored_output,
+                                            file_name="waterfall_analysis.xlsx",
+                                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                        )
+
+                                        llm_reasoning.explain_waterfall_chart_with_groq(result_df)
+
+                                    else:
+                                        st.warning("No data returned from the extraction.")
             
 elif tabs == "Inventory Simulation":
     st.title("Inventory Simulation")
@@ -299,14 +502,21 @@ elif tabs == "Inventory Simulation":
     uploaded_consumption = st.file_uploader("Upload Consumption File", type="xlsx")
     uploaded_goods_receipt = st.file_uploader("Upload Goods Receipt Excel File", type="xlsx")
     uploaded_order_placement = st.file_uploader("Upload Order Placement Excel File", type="xlsx")
-    uploaded_merged = st.file_uploader("Upload Merged Shortage Excel File", type="xlsx")
-
+    uploaded_merged = st.file_uploader("Upload Shortage Zip File",  type=["zip"])
+               
     # Load files only when they are first uploaded
-    DES.load_and_store_file(uploaded_consumption, "consumption_df")
-    DES.load_and_store_file(uploaded_goods_receipt, "gr_df")
-    DES.load_and_store_file(uploaded_order_placement, "order_df")
-    DES.load_and_store_file(uploaded_merged, "merged_df")
+    if uploaded_consumption and "consumption_df" not in st.session_state:
+        DES.load_and_store_file(uploaded_consumption, "consumption_df")
 
+    if uploaded_goods_receipt and "gr_df" not in st.session_state:
+        DES.load_and_store_file(uploaded_goods_receipt, "gr_df")
+
+    if uploaded_order_placement and "order_df" not in st.session_state:
+        DES.load_and_store_file(uploaded_order_placement, "order_df")
+
+    if uploaded_merged and "merged_df" not in st.session_state:
+        DES.load_zip_folder(uploaded_merged, "merged_df")
+    
     # Access stored files without reloading
     if "consumption_df" in st.session_state:
         consumption_df = st.session_state["consumption_df"]
@@ -361,7 +571,7 @@ elif tabs == "Inventory Simulation":
                                     (gr_df['Site'] == selected_site)].reset_index(drop=True)
         filtered_merged = merged_df[(merged_df['Material Number'] == selected_material) & 
                                     (merged_df['Plant'] == selected_plant) & 
-                                    (merged_df['Site'] == selected_site) & (merged_df['Measures'] == 'Supply')].reset_index(drop=True)
+                                    (merged_df['Site'] == selected_site)].reset_index(drop=True)
         
         max_lead_time, std_lead_time, dist_name, dist_params = DES.process_lead_time(filtered_merged)
 
@@ -369,7 +579,11 @@ elif tabs == "Inventory Simulation":
             num_weeks = st.number_input("Number of Simulation Weeks", min_value=1, value=52)
             st.info("Set the number of weeks for the simulation.")
 
-            initial_inventory = st.number_input("Initial Inventory", min_value=10, max_value=20000, value=50)
+            if not filtered_consumption.empty and "BUn" in filtered_consumption.columns:
+                unit = filtered_consumption["BUn"].iloc[0]
+            else:
+                unit = ""
+            initial_inventory = st.number_input(f"Initial Inventory (BUn: {unit})", min_value=10, max_value=20000, value=50)
             st.info("The starting inventory level for the simulation.")
 
             # Consumption Input
@@ -400,7 +614,7 @@ elif tabs == "Inventory Simulation":
                 st.info("The inventory level at which a new order is placed.")
 
             else:  # Consumption Type is "Distribution"
-                consumption_values = filtered_consumption.iloc[:, 3:].values.flatten()
+                consumption_values = filtered_consumption.iloc[:, 4:].values.flatten()
                 consumption_distribution_params, consumption_best_distribution  = DES.fit_distribution(consumption_values, "Consumption")
                 mean_consumption = DES.get_mean_from_distribution(consumption_best_distribution, consumption_distribution_params)
                 std_consumption = DES.get_std_from_distribution(consumption_best_distribution, consumption_distribution_params)
@@ -441,18 +655,24 @@ elif tabs == "Inventory Simulation":
             demand_surge_weeks_input = st.multiselect("Demand Surge Weeks", demand_surge_weeks_options)
             st.info("Select the weeks where you want to simulate a sudden increase in demand.")
 
+            min_order_qty = st.number_input("Minimum Order Quantity", min_value=1, max_value=10000, value=50)
+            st.info("Select the minimum order quantity for this material number to prevent small orders during simulation.")
+
             # Order Quantity Input
             order_quantity_type = st.radio("Order Quantity Type", ["Fixed", "Distribution"])
             order_quantity = 0
             order_distribution_params = None
             order_distribution_best = "Fixed Distribution"
+            
+
 
             if order_quantity_type == "Fixed":
-                order_quantity = st.number_input("Order Quantity", min_value=10, max_value=10000, value=50)
+                order_quantity = st.number_input("Order Quantity", min_value=10, max_value=10000, value=min_order_qty)
             else:  # Order Quantity Type is "Distribution"
                 order_values = filtered_orders.iloc[:, 3:].values.flatten()
                 order_distribution_params, order_distribution_best = DES.fit_distribution(order_values, "Order Quantity")
 
+            
         with col3:
             lead_time_std_dev = st.number_input("Lead Time Std Dev (weeks)", min_value=0.0, max_value=10.0, value=float(std_lead_time))
             st.info("The standard deviation of the lead time, representing variability.")
@@ -460,12 +680,12 @@ elif tabs == "Inventory Simulation":
             demand_surge_factor = st.number_input("Demand Surge Factor", min_value=0.5, max_value=5.0, value=2.0, step=0.1)
             st.info("Enter the factor by which demand will increase during the selected weeks. (e.g., 2.0 doubles demand)")
 
-            N = st.number_input("Number of Monte Carlo Simulations", min_value=1, max_value=10000, value=10)
+            N = st.number_input("Number of Monte Carlo Simulations", min_value=1, max_value=10000, value=1)
             st.info("The number of Monte Carlo simulations to run. A higher number provides more accurate results but requires more computation.")
 
         if st.button("Run Simulation"):
             with st.spinner("Running simulation..."):
-                args = (filtered_consumption, filtered_orders, filtered_receipts, initial_inventory, reorder_point, order_quantity, lead_time, lead_time_std_dev, demand_surge_weeks_input, demand_surge_factor, consumption_distribution_params, consumption_type, consumption_best_distribution, consumption_values, num_weeks, order_distribution_params, order_distribution_best, order_quantity_type)
+                args = (filtered_consumption, filtered_orders, filtered_receipts, initial_inventory, reorder_point, order_quantity, lead_time, lead_time_std_dev, demand_surge_weeks_input, demand_surge_factor, consumption_distribution_params, consumption_type, consumption_best_distribution, consumption_values, num_weeks, order_distribution_params, order_distribution_best, order_quantity_type, min_order_qty)
 
                 # Run Monte Carlo simulation
                 

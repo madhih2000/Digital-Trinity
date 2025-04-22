@@ -8,6 +8,9 @@ import time
 import fitter
 import random
 import logging
+import zipfile 
+import tempfile
+import os
 
 from scipy.stats import cauchy, chi2, expon, exponpow, gamma, lognorm, norm, powerlaw, rayleigh, uniform
 from statsmodels.genmod.families import Poisson, NegativeBinomial
@@ -19,6 +22,9 @@ from statsmodels.tsa.stattools import adfuller
 
 import forecast_models
 
+# Configure logging (optional: customize filename, format, etc.)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
 def load_data(uploaded_file):
     """Loads data from an uploaded Excel file."""
     try:
@@ -27,6 +33,90 @@ def load_data(uploaded_file):
     except Exception as e:
         st.error(f"Error loading file: {e}")
         return None
+
+
+def load_zip_folder(zip_file_path, key):
+    with st.spinner("Processing ZIP file. Please wait..."):
+        # Use a temporary directory for extracting ZIP contents
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Extract the ZIP file to the temporary directory
+            with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                zip_ref.extractall(temp_dir)
+
+            # Initialize an empty DataFrame to store all data
+            all_data = None
+
+            # Set of detected week numbers
+            week_numbers = []
+
+            # Specify the columns to select
+            columns_to_select = ['Plant', 'Site', 'Material Group', 'Material Number', 'Supplier', 'Measures', 'Inventory On-Hand', 'Lead Time (Week)']
+
+            # Loop through each file in the unzipped directory
+            for root, dirs, files in os.walk(temp_dir):
+                for file_name in files:
+                    if file_name.startswith('WW') and file_name.endswith('.xlsx'):
+                        # Extract week number using regex
+                        match = re.search(r'WW(\d+)', file_name)
+                        if not match:
+                            continue  # Skip if no match found
+
+                        week_number = match.group(1).zfill(2)
+                        week_numbers.append(week_number)
+
+                        # Log progress
+                        logging.info(f"Processing week WW{week_number} - file: {file_name}")
+
+                        # Construct the full path to the file
+                        file_path = os.path.join(root, file_name)
+
+                        # Read Excel file
+                        df = pd.read_excel(file_path)
+
+                        # Clean column names
+                        df.columns = df.columns.str.replace('\n', ' ').str.strip().str.replace('  ', ' ')
+
+                        # Filter and select columns
+                        df = df[df['Measures'] == 'Supply']
+                        df = df[columns_to_select]
+
+                        # Rename columns with week number
+                        df.rename(columns={
+                            'Inventory On-Hand': f'Inventory WW{week_number}',
+                            'Lead Time (Week)': f'Lead Time WW{week_number}'
+                        }, inplace=True)
+
+                        # Drop the Measures column
+                        df.drop(columns=['Measures'], inplace=True)
+
+                        # Merge into all_data
+                        if all_data is None:
+                            all_data = df
+                        else:
+                            all_data = pd.merge(
+                                all_data, df,
+                                on=['Plant', 'Site', 'Material Group', 'Material Number', 'Supplier'],
+                                how='outer'
+                            )
+
+            # Sort week_numbers and build column order
+            week_numbers = sorted(set(week_numbers), key=lambda x: int(x))
+            columns_order = ['Plant', 'Site', 'Material Group', 'Material Number', 'Supplier']
+            for week in week_numbers:
+                columns_order.append(f'Inventory WW{week}')
+                columns_order.append(f'Lead Time WW{week}')
+
+            # Ensure only available columns are selected
+            existing_columns = [col for col in columns_order if col in all_data.columns]
+            all_data = all_data[['Plant', 'Site', 'Material Group', 'Material Number', 'Supplier'] + existing_columns[5:]]
+
+            # Remove any suffixes accidentally added during merge
+            all_data.columns = all_data.columns.str.replace(r'\.\w+', '', regex=True)
+
+            # Save to session state
+            if key not in st.session_state:
+                st.session_state[key] = all_data
+
 
 # Function to load and store files in session state
 def load_and_store_file(file, key):
@@ -230,14 +320,14 @@ def preprocess_data_consumption(df):
     # Step 2: Extract the week number of the year
     df['Week'] = df['Pstng Date'].dt.isocalendar().week
     # Step 3: Group by Material Number, Plant, Site, and Week, then sum the Quantity
-    grouped = df.groupby(['Material Number', 'Plant', 'Site', 'Week'])['Quantity'].sum().reset_index()
+    grouped = df.groupby(['Material Number', 'Plant', 'Site', 'Week','BUn'])['Quantity'].sum().reset_index()
     # Step 4: Pivot the data to get quantities per week as columns
-    pivot_df = grouped.pivot_table(index=['Material Number', 'Plant', 'Site'], columns='Week', values='Quantity', aggfunc='sum').reset_index()
+    pivot_df = grouped.pivot_table(index=['Material Number', 'Plant', 'Site', 'BUn'], columns='Week', values='Quantity', aggfunc='sum').reset_index()
     # Step 5: Rename the columns to include 'WW' for clarity
-    pivot_df.columns = ['Material Number', 'Plant', 'Site'] + [f'WW{int(col)}_Consumption' for col in pivot_df.columns[3:]]
+    pivot_df.columns = ['Material Number', 'Plant', 'Site', 'BUn'] + [f'WW{int(col)}_Consumption' for col in pivot_df.columns[4:]]
     pivot_df = pivot_df.fillna(0)
     # Apply abs() only to the numeric columns (ignoring non-numeric ones)
-    pivot_df.iloc[:, 3:] = pivot_df.iloc[:, 3:].apply(pd.to_numeric, errors='coerce').abs()
+    pivot_df.iloc[:, 4:] = pivot_df.iloc[:, 4:].apply(pd.to_numeric, errors='coerce').abs()
     return pivot_df
 
 def preprocess_data_GR(df_GR):
@@ -799,8 +889,7 @@ def simulate_ordering(order_distribution_name, order_distribution_params, num_si
         return None
 
 # Inventory Simulation
-def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts, initial_inventory, reorder_point, order_quantity, lead_time, lead_time_std_dev, demand_surge_weeks, demand_surge_factor, consumption_distribution_params, consumption_type, consumption_best_distribution, consumption_values, num_weeks, order_distribution_params,order_distribution_best, order_quantity_type):
-
+def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts, initial_inventory, reorder_point, order_quantity, lead_time, lead_time_std_dev, demand_surge_weeks, demand_surge_factor, consumption_distribution_params, consumption_type, consumption_best_distribution, consumption_values, num_weeks, order_distribution_params,order_distribution_best, order_quantity_type, min_order_qty):
     inventory = initial_inventory
     orders_pending = {}
     inventory_history = []
@@ -830,12 +919,16 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
             logging.warning(f"Reactive Order of {orders_pending[week]} arrived.")
             event_description += f"Reactive Order of {orders_pending[week]} arrived.\n"
             del orders_pending[week]
+        
+        event_description += f"Interim Inventory (Reactive): {inventory}\n"
 
         if week in proactive_orders_pending:
             proactive_inventory += proactive_orders_pending[week]
             logging.warning(f"Proactive Order of {proactive_orders_pending[week]} arrived.")
             event_description += f"Proactive Order of {proactive_orders_pending[week]} arrived.\n"
             del proactive_orders_pending[week]
+        
+        event_description += f"Interim Inventory (Proactive): {proactive_inventory}\n"
 
 
         # Consumption
@@ -890,67 +983,55 @@ def simulate_inventory(filtered_consumption, filtered_orders, filtered_receipts,
         logging.warning(f"Forecasted consumption for next {lead_time} weeks: {sum_of_forecasted_values}")
         event_description += f"Forecasted consumption for next {lead_time} weeks is {sum_of_forecasted_values}.\n"
 
+        total_proactive_inventory = proactive_inventory + sum(qty for wk, qty in proactive_orders_pending.items() if i < weeks.index(wk) < num_weeks) # Ensure arrival within simulation window
+
         proactive_forecast = False
         variation = round(random.gauss(0, lead_time_std_dev))
         # Check for reorder
-        if proactive_inventory  <= sum_of_forecasted_values:
-            order_quantity_to_use = sum_of_forecasted_values - proactive_inventory
-            order_quantity_to_use = max(1, int(order_quantity_to_use))  # Ensure minimum order of 1
+        if total_proactive_inventory  <= sum_of_forecasted_values:
+            order_quantity_to_use = sum_of_forecasted_values - total_proactive_inventory
+            order_quantity_to_use = max(min_order_qty, int(order_quantity_to_use)) 
 
             order_arrival = int(i + lead_time + variation)
             if order_arrival < num_weeks:
                 proactive_orders_pending[weeks[order_arrival]] = order_quantity_to_use
                 logging.warning(f"Proactive Order of {order_quantity_to_use} placed for week {weeks[order_arrival]}.")
                 event_description += f"Proactive Order of {order_quantity_to_use} placed due to forecasted consumption. Arrival in week {weeks[order_arrival]}.\n"
+                event_description += f"Proactive Order will arrive in week {weeks[order_arrival]}.\n"
                 proactive_forecast = True
         else:
             event_description += "No Proactive Order placed due to forecasting this week.\n"
 
-        # if proactive_inventory <= reorder_point and not proactive_forecast:
-        #     order_quantity_to_use = order_quantity
-        #     order_values = filtered_orders.iloc[:, 3:].values.flatten()
-        #     if order_quantity_type == "Distribution" and order_distribution_params:
-        #         order_quantity_to_use = simulate_ordering(order_distribution_best, order_distribution_params)
-        #         if order_quantity_to_use is None:
-        #             order_quantity_to_use = 0
-            
-        #     average_consumption = np.max(order_values)
-        #     order_quantity_to_use = min(average_consumption, int(order_quantity_to_use))
-        #     order_arrival = int(i + lead_time + round(random.gauss(0, lead_time_std_dev)))
-
-        #     if order_arrival < num_weeks:
-        #         proactive_orders_pending[weeks[order_arrival]] = order_quantity_to_use
-        #         event_description += f" Proactive Order of {order_quantity_to_use} placed due to reorder point. Arrival in week {weeks[order_arrival]}.\n"
-        # else:
-        #     event_description += "No proactive order placed this week.\n"
-
+        # Check if an order is already pending that will bring inventory above the reorder point within the simulation window
+        future_inventory = proactive_inventory + sum(qty for wk, qty in proactive_orders_pending.items() if i < weeks.index(wk) < num_weeks and weeks.index(wk) > i)
         # Check for reorder
-        if (inventory <= reorder_point) or (proactive_inventory <= reorder_point and not proactive_forecast):
+        if (inventory <= reorder_point) or (future_inventory <= reorder_point and not proactive_forecast):
             order_quantity_to_use = order_quantity
             order_values = filtered_orders.iloc[:, 3:].values.flatten()
             if order_quantity_type == "Distribution" and order_distribution_params:
                 order_quantity_to_use = simulate_ordering(order_distribution_best, order_distribution_params)
+                order_quantity_to_use = max(min_order_qty, int(order_quantity_to_use))
                 if order_quantity_to_use is None:
                     order_quantity_to_use = 0
             average_consumption = np.max(order_values)
-            order_quantity_to_use = min(average_consumption, int(order_quantity_to_use))
+            order_quantity_to_use = max(average_consumption, int(order_quantity_to_use))
             order_arrival = int(i + lead_time + variation)
 
             if order_arrival < num_weeks:
                 orders_pending[weeks[order_arrival]] = order_quantity_to_use
-                
                 # Check if the proactive condition is met before adding to proactive_orders_pending
-                if proactive_inventory <= reorder_point and not proactive_forecast:
+                if future_inventory <= reorder_point and not proactive_forecast:
                     proactive_orders_pending[weeks[order_arrival]] = order_quantity_to_use
                     logging.warning(f"Proactive Order of {order_quantity_to_use} placed for week {weeks[order_arrival]} due to reorder point.")
                     event_description += f"Proactive Order of {order_quantity_to_use} placed due to reorder point. Arrival in week {weeks[order_arrival]}.\n"
-                
+                    event_description += f"Proactive Order will arrive in week {weeks[order_arrival]}.\n"
                 event_description += f"Reactive Order of {order_quantity_to_use} placed due to reorder point. Arrival in week {weeks[order_arrival]}.\n"
+                event_description += f"Reactive Order will arrive in week {weeks[order_arrival]}.\n"
         else:
             event_description += "No Reactive Order placed this week.\n"
 
         # Calculate WoS
-        average_consumption = sum(consumption_history[:i + 1]) / (i + 1) if i >= 0 else 0
+        average_consumption = sum(consumption_history[max(0, i - 5):i + 1]) / len(consumption_history[max(0, i - 5):i + 1])
         wos = inventory / average_consumption if average_consumption > 0 else 0
         wos_history.append(wos)
 
@@ -997,7 +1078,7 @@ def run_monte_carlo_simulation(N, *args):
         all_weekly_events.append(weekly_events)
 
         # Update progress bar
-        my_bar.progress((i + 1) / N, text=f"Processing simulation: {i + 2} out of {N}")
+        my_bar.progress((i + 1) / N, text=f"Processing simulation: {i + 1} out of {N}")
         
     time.sleep(1)
     # Remove progress bar when done
@@ -1014,15 +1095,6 @@ def run_monte_carlo_simulation(N, *args):
         all_weekly_events
     )
 
-# def compute_averages(all_inventory_histories, all_stockout_weeks, all_wos_histories, all_consumption_histories):
-#     avg_inventory = np.mean(all_inventory_histories, axis=0)
-#     avg_wos = np.mean(all_wos_histories, axis=0)
-#     avg_consumption = np.mean(all_consumption_histories, axis=0)
-
-#     # Stockout frequency: Percentage of runs where a stockout occurred in each week
-#     stockout_frequency = np.mean([len(stockout_weeks) > 0 for stockout_weeks in all_stockout_weeks])
-
-#     return avg_inventory, avg_wos, avg_consumption, stockout_frequency
 
 def compute_averages(all_inventory_histories, all_proactive_inventory_histories, all_stockout_weeks, all_proactive_stockout_weeks, all_wos_histories, all_proactive_wos_histories, all_consumption_histories):
     avg_inventory = np.mean(all_inventory_histories, axis=0)
@@ -1069,12 +1141,18 @@ def extract_weekly_table(weekly_events):
             'Week Number': i,
             'Initial Inventory (Reactive)': 0,
             'Initial Inventory (Proactive)': 0,
+            'Reactive Order Arrived': None,
+            'Proactive Order Arrived': None,
+            'Interim Inventory (Reactive)': None,
+            'Interim Inventory (Proactive)': None,
             'Predicted Consumption for Next Few Weeks (Sum)': 0,
             'Consumption': 0,
             'End of Week Inventory (Proactive)': 0,
             'End of Week Inventory (Reactive)': 0,
             'Proactive Order Placed': 0,
+            'Reactive Order Arrival Week': None,
             'Reactive Order Placed': 0,
+            'Proactive Order Arrival Week': None,
             'Stockout': False  
         }
 
@@ -1089,6 +1167,30 @@ def extract_weekly_table(weekly_events):
                     week_data['Initial Inventory (Proactive)'] = int(float(re.search(r": (\d+\.?\d*)", line).group(1)))
                 except (ValueError, AttributeError):
                     print(f"Error extracting 'Starting Inventory (Proactive)' from line: {line}")
+            elif "Reactive Order of" in line and "arrived" in line:
+                try:
+                    arrival_quantity = float(re.search(r"Reactive Order of (\d+\.?\d*) arrived", line).group(1))
+                    week_data['Reactive Order Arrived'] = int(arrival_quantity)
+                except (ValueError, AttributeError):
+                    print(f"Error extracting 'Reactive Order arrived' from line: {line}")
+            elif "Proactive Order of" in line and "arrived" in line:
+                try:
+                    arrival_quantity = float(re.search(r"Proactive Order of (\d+\.?\d*) arrived", line).group(1))
+                    week_data['Proactive Order Arrived'] = int(arrival_quantity)
+                except (ValueError, AttributeError):
+                    print(f"Error extracting 'Proactive Order arrived' from line: {line}")
+            elif "Interim Inventory (Reactive):" in line:
+                    try:
+                        inventory_level = int(float(re.search(r"Interim Inventory \(Reactive\): (\d+\.?\d*)", line).group(1)))
+                        week_data['Interim Inventory (Reactive)'] = inventory_level
+                    except (ValueError, AttributeError):
+                        print(f"Error extracting 'Interim Inventory (Reactive)' from line: {line}")
+            elif "Interim Inventory (Proactive):" in line:
+                try:
+                    inventory_level = int(float(re.search(r"Interim Inventory \(Proactive\): (\d+\.?\d*)", line).group(1)))
+                    week_data['Interim Inventory (Proactive)'] = inventory_level
+                except (ValueError, AttributeError):
+                    print(f"Error extracting 'Interim Inventory (Proactive)' from line: {line}")
             elif "Forecasted consumption for next" in line:
                 try:
                     forecasted_value = re.search(r"is (\d+\.?\d*)", line).group(1)
@@ -1122,6 +1224,18 @@ def extract_weekly_table(weekly_events):
                     week_data['Reactive Order Placed'] = int(float(order_value))
                 except (ValueError, AttributeError):
                     print(f"Error extracting 'Reactive Order of' from line: {line}")
+            elif "Reactive Order will arrive in week" in line:
+                try:
+                    arrival_week = int(re.search(r"week (\d+)", line).group(1))
+                    week_data['Reactive Order Arrival Week'] = arrival_week
+                except (ValueError, AttributeError):
+                    print(f"Error extracting 'Reactive Order arrival week' from line: {line}")
+            elif "Proactive Order will arrive in week" in line:
+                try:
+                    arrival_week = int(re.search(r"week (\d+)", line).group(1))
+                    week_data['Proactive Order Arrival Week'] = arrival_week
+                except (ValueError, AttributeError):
+                    print(f"Error extracting 'Proactive Order arrival week' from line: {line}")
             elif "Stockout occurred" in line:
                 week_data['Stockout'] = True
 

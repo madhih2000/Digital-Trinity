@@ -9,6 +9,5 @@ openpyxl
 groq
 xgboost
 scikit-learn
-statsmodels
-fitter
 setuptools
+fitter
