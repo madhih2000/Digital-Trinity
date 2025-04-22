@@ -236,11 +236,7 @@ def explain_waterfall_chart_with_groq(df):
     """
     # Group by material number and calculate the sum of each measure
     measures = df.columns[3:]  # Assuming the first three columns are not measures
-    material_stats = df.groupby(material_column)[measures].sum().reset_index()
     df_string = measures.to_string(index=False)
-    # Create a string representation of the statistics
-    stats_string = material_stats.to_string(index=False)
-
     client = Groq(api_key=API_KEY)
 
     system_prompt = """
