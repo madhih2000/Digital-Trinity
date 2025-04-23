@@ -235,7 +235,7 @@ def explain_waterfall_chart_with_groq(df):
         material_column (str): The name of the column containing material numbers.
     """
     measures = df.iloc[:, 3:]  # Assuming the first three columns are not measures
-    df_string = ", ".join(measures)
+    df_string = ", ".join(measures.astype(str).values.flatten())
     st.write(measures)
     st.write(df_string)
     quit()
