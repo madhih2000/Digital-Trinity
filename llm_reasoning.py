@@ -236,6 +236,7 @@ def explain_waterfall_chart_with_groq(df):
     """
     measures = df.columns[3:]  # Assuming the first three columns are not measures
     df_string = ", ".join(measures)
+    st.write(df_string)
     client = Groq(api_key=API_KEY)
 
     system_prompt = """
