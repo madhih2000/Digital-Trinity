@@ -239,37 +239,33 @@ def explain_waterfall_chart_with_groq(df):
     client = Groq(api_key=API_KEY)
 
     system_prompt = """
-    You are an expert supply chain analyst specializing in the semiconductor industry with extensive experience in data analysis and interpretation. Your role is to analyze statistical data and provide actionable insights based on your findings.
+            You are an expert supply chain analyst specializing in the semiconductor industry with extensive experience in data analysis and interpretation. Your role is to analyze statistical data and provide actionable insights based on your findings.
+            
+            Your task is to interpret a string description of waterfall chart dataframe representing supply chain values at the material number level which are from past historical data. The data is structured in a weekly format labelled as “WW” and the respective week number.
+            
+            Provide key insights and interpretations of the waterfall chart data in bullet points.
+            
+            Focus on:
+            1.  Identify any negative values in the rows 'Weeks of Stock', and highlight if there are significant differences of more than 4 weeks. 
+            2.  Identify any major differences between the row 'Demand w/o Buffer' under the 'Measures' row for the material number across the different weeks in the first column.
+            3.  Distinguish between the effects of demand variability and supply-side delays or gaps.
+            4.  If there are any negative values for the 'EOH w/o Buffer', validate within the same week if there are any supply issues or negative inventory or demand requirements.
+            5.  Provide contextual interpretations—do not just state values.
+            6.  Provide recommendations focusing on improving the overall supply to meet demand fluctuations.
+            7.  Infer root causes for observed issues, particularly:
+            * Why does the inventory on hand - 'EOH w/o Buffer' - turn negative and remains negative (e.g., zero supply, poor planning, or missed lead times, unexpected demand)
+            
+            Integrate into your analysis the understanding that while the waterfall chart visually represents the cumulative effect of sequential changes, the actual root causes should be inferred from the underlying data and context. Do not simply state this explanation as a separate point; weave it into your analysis.
+            Do not give me generic explanations. Everything has to be backed with the data you have seen. No generic ifs and hows.
+            
+            Important: Use the sequential weekly data to derive temporal insights. Understand that the waterfall-style cumulative effect seen in EOH charts reflects decisions made in earlier weeks. Your analysis must go beyond visualization and into operational logic.
 
-    Your task is to interpret a string description of waterfall chart dataframe representing supply chain values at the material number level which are from past historical data.
-
-    Provide key insights and interpretations of the waterfall chart data in bullet points.
-
-    Focus on:
-
-    - Analyze how key supply chain measures evolve over time and highlight key inflection points (weeks with major changes or divergences).
-    - Identify the primary drivers of negative or positive changes in EOH values over the weeks.
-    - Explain why inventory continues to decline (if applicable) even when PO/PR requests are present.
-    - Distinguish between the effects of demand variability and supply-side delays or gaps.
-    - Detect any abnormal or unexpected behaviors, such as:
-        - Persistent negative EOH and worsening over time
-        - No supply input despite growing demand
-        - Late PO/PR Requests and possible implications on fulfillment
-    - Provide contextual interpretations—do not just state values.
-    - Infer root causes for observed issues, particularly:
-        * Why EOH turns negative and remains negative (e.g., zero supply, poor planning, or missed lead times)
-        * Why demand buffers do not mitigate shortages
-        * Why PO/PR requests are concentrated late (e.g., WW27), and whether they are reactive or part of a flawed forecast cycle
-    - Integrate into your analysis the understanding that while the waterfall chart visually represents the cumulative effect of sequential changes, the actual root causes should be inferred from the underlying data and context. Do not simply state this explanation as a separate point; weave it into your analysis.
-    
-    Important: Use the sequential weekly data to derive temporal insights. Understand that the waterfall-style cumulative effect seen in EOH charts reflects decisions made in earlier weeks. Your analysis must go beyond visualization and into operational logic.
-
-    Do not include any introductory phrases or preambles. Start directly with the bullet points.
-    """
+            Do not include any introductory phrases or preambles. Start directly with the bullet points.
+            """
 
     user_prompt = f"""
-    Explain the root cause analysis for the following waterfall chart data:\n\n{df_string}
-    """
+        Explain the root cause analysis for the following waterfall chart data:\n\n{df_string}
+        """
 
     try:
         chat_completion = client.chat.completions.create(
